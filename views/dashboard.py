@@ -1,0 +1,252 @@
+# views/dashboard.py
+# Controller: routes sidebar navigation to the correct View frame (MVC)
+import tkinter as tk
+from tkinter import ttk, messagebox
+
+from views.inletter_view import InletterView
+from views.outletter_view import OutletterView
+from views.doctype_view import DoctypeView
+from views.action_view import ActionView
+from views.dept_view import DeptView
+from views.main_query import MainQueryView
+from views.access_mgmt_view import AccessMgmtView
+from views.role_mgmt_view import RoleMgmtView
+from views.role_management import RoleManagementView
+from models.role_model import user_can
+
+
+class MainDashboard(tk.Tk):
+    """Main window controller — sidebar nav loads View frames on demand."""
+
+    SIDEBAR_WIDTH = 240
+    SIDEBAR_BG = "#1e293b"
+    SIDEBAR_ACTIVE = "#334155"
+    SIDEBAR_HOVER = "#475569"
+    SIDEBAR_FG = "#f8fafc"
+    CONTENT_BG = "#f1f5f9"
+
+    def __init__(self, current_user):
+        super().__init__()
+        self.current_user = current_user
+        self.role = current_user.get("role", "user")
+        self._active_key = None
+        self._nav_buttons = {}
+
+        self.title("Office Document Management System (DMS)")
+        self.geometry("1100x780")
+        self.minsize(900, 650)
+
+        self._setup_styles()
+        self._build_layout()
+        self.show_view("inletter")
+
+    # ------------------------------------------------------------------ styles
+    def _setup_styles(self):
+        style = ttk.Style(self)
+        style.theme_use("clam")
+        style.configure("Content.TFrame", background=self.CONTENT_BG)
+        style.configure("Header.TLabel", font=("Segoe UI", 16, "bold"), background=self.CONTENT_BG)
+        style.configure("SubHeader.TLabel", font=("Segoe UI", 10), background=self.CONTENT_BG, foreground="#475569")
+
+    # ------------------------------------------------------------------ layout
+    def _build_layout(self):
+        self.configure(bg=self.CONTENT_BG)
+
+        # Top header bar (spans full width above sidebar + content)
+        self.header = tk.Frame(self, bg="#ffffff", height=56)
+        self.header.pack(side="top", fill="x")
+        self.header.pack_propagate(False)
+
+        tk.Label(
+            self.header,
+            text="ရုံးသုံးစာရွက်စာတမ်းစီမံခန့်ခွဲမှုစနစ်",
+            font=("Segoe UI", 14, "bold"),
+            bg="#ffffff",
+            fg="#0f172a",
+        ).pack(side="left", padx=20, pady=12)
+
+        name = self.current_user.get("full_name") or self.current_user.get("username")
+        tk.Label(
+            self.header,
+            text=f"{name}  ·  {self.role}",
+            font=("Segoe UI", 10),
+            bg="#ffffff",
+            fg="#64748b",
+        ).pack(side="right", padx=(0, 8), pady=12)
+
+        tk.Button(
+            self.header,
+            text="Logout",
+            font=("Segoe UI", 9),
+            bg="#ef4444",
+            fg="white",
+            activebackground="#dc2626",
+            activeforeground="white",
+            relief="flat",
+            padx=12,
+            pady=4,
+            cursor="hand2",
+            command=self.logout,
+        ).pack(side="right", padx=20, pady=12)
+
+        # Body: sidebar (left) + main content (right)
+        body = tk.Frame(self, bg=self.CONTENT_BG)
+        body.pack(side="top", fill="both", expand=True)
+
+        self._build_sidebar(body)
+
+        self.content_wrapper = ttk.Frame(body, style="Content.TFrame")
+        self.content_wrapper.pack(side="left", fill="both", expand=True)
+
+        # Page title inside content area
+        title_bar = ttk.Frame(self.content_wrapper, style="Content.TFrame")
+        title_bar.pack(side="top", fill="x", padx=24, pady=(16, 0))
+        self.page_title = ttk.Label(title_bar, text="", style="Header.TLabel")
+        self.page_title.pack(side="left")
+        self.page_subtitle = ttk.Label(title_bar, text="", style="SubHeader.TLabel")
+        self.page_subtitle.pack(side="left", padx=(12, 0))
+
+        # Container cleared and repopulated when navigation changes
+        self.content_container = ttk.Frame(self.content_wrapper, style="Content.TFrame")
+        self.content_container.pack(side="top", fill="both", expand=True, padx=16, pady=16)
+
+    def _build_sidebar(self, parent):
+        sidebar = tk.Frame(parent, bg=self.SIDEBAR_BG, width=self.SIDEBAR_WIDTH)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
+
+        tk.Label(
+            sidebar,
+            text="DMS",
+            font=("Segoe UI", 18, "bold"),
+            bg=self.SIDEBAR_BG,
+            fg=self.SIDEBAR_FG,
+        ).pack(anchor="w", padx=20, pady=(24, 4))
+
+        tk.Label(
+            sidebar,
+            text="Navigation",
+            font=("Segoe UI", 9),
+            bg=self.SIDEBAR_BG,
+            fg="#94a3b8",
+        ).pack(anchor="w", padx=20, pady=(0, 16))
+
+        for item in self._get_nav_items():
+            btn = tk.Button(
+                sidebar,
+                text=item["label"],
+                font=("Segoe UI", 10),
+                bg=self.SIDEBAR_BG,
+                fg=self.SIDEBAR_FG,
+                activebackground=self.SIDEBAR_ACTIVE,
+                activeforeground=self.SIDEBAR_FG,
+                relief="flat",
+                anchor="w",
+                padx=20,
+                pady=10,
+                cursor="hand2",
+                command=lambda k=item["key"]: self.show_view(k),
+            )
+            btn.pack(fill="x", padx=8, pady=2)
+            btn.bind("<Enter>", lambda e, b=btn: self._on_nav_enter(b))
+            btn.bind("<Leave>", lambda e, b=btn, k=item["key"]: self._on_nav_leave(b, k))
+            self._nav_buttons[item["key"]] = btn
+
+    # ------------------------------------------------------------------ MVC nav registry
+    def _get_nav_items(self):
+        """Navigation map: key -> View class (Model logic stays in models/)."""
+        items = [
+            {"key": "inletter", "label": "  Inletter", "title": "ဝင်စာရင်းသွင်းဖောင်", "subtitle": "Inletter Entry"},
+            {"key": "outletter", "label": "  Outletter", "title": "ထွက်စာရင်းသွင်းဖောင်", "subtitle": "Outletter Entry"},
+            {"key": "doctype", "label": "  Doc Type", "title": "စာရွက်စာတမ်းအမျိုးအစား", "subtitle": "Document Type"},
+            {"key": "action", "label": "  Action", "title": "လုပ်ငန်းစဉ်မှတ်တမ်း", "subtitle": "Action & Process"},
+            {"key": "department", "label": "  Department", "title": "ဌာနဆိုင်ရာမှတ်တမ်း", "subtitle": "Department Entry"},
+            {"key": "query", "label": "  Query / Report", "title": "စာရှာဖွေ / Report", "subtitle": "Search & Export"},
+            {"key": "rows", "label": "  Row Management", "title": "စာရင်းအတန်းစီမံခန့်ခွဲမှု", "subtitle": "Edit & Delete Rows"},
+        ]
+        if user_can(self.current_user, "can_manage_users"):
+            items.append({
+                "key": "users",
+                "label": "  User Management",
+                "title": "အသုံးပြုသူစီမံခန့်ခွဲမှု",
+                "subtitle": "Create & manage user accounts",
+            })
+        if user_can(self.current_user, "can_manage_roles"):
+            items.append({
+                "key": "roles",
+                "label": "  Role Management",
+                "title": "Role စီမံခန့်ခွဲမှု",
+                "subtitle": "Define roles & permissions",
+            })
+        return items
+
+    def _get_view_factory(self, key):
+        """Return (ViewClass, kwargs) for the given navigation key."""
+        factories = {
+            "inletter": (InletterView, {"current_user": self.current_user}),
+            "outletter": (OutletterView, {"current_user": self.current_user}),
+            "doctype": (DoctypeView, {}),
+            "action": (ActionView, {}),
+            "department": (DeptView, {}),
+            "query": (MainQueryView, {"current_user": self.current_user}),
+            "rows": (RoleManagementView, {"current_user": self.current_user}),
+            "users": (AccessMgmtView, {"current_user": self.current_user}),
+            "roles": (RoleMgmtView, {"current_user": self.current_user}),
+        }
+        return factories.get(key)
+
+    # ------------------------------------------------------------------ controller actions
+    def show_view(self, key):
+        """Clear content container and load the selected View frame."""
+        meta = next((i for i in self._get_nav_items() if i["key"] == key), None)
+        factory = self._get_view_factory(key)
+        if not meta or not factory:
+            return
+
+        view_class, kwargs = factory
+        self._active_key = key
+        self._highlight_nav(key)
+
+        self.page_title.config(text=meta["title"])
+        self.page_subtitle.config(text=meta["subtitle"])
+
+        self._clear_content()
+        view_frame = view_class(self.content_container, **kwargs)
+        view_frame.pack(fill="both", expand=True)
+        # Reload DB-backed lists each time the screen is opened (sidebar navigation)
+        if hasattr(view_frame, "refresh_data"):
+            view_frame.after_idle(view_frame.refresh_data)
+
+    def _clear_content(self):
+        for widget in self.content_container.winfo_children():
+            widget.destroy()
+
+    def _highlight_nav(self, active_key):
+        for key, btn in self._nav_buttons.items():
+            if key == active_key:
+                btn.config(bg=self.SIDEBAR_ACTIVE, font=("Segoe UI", 10, "bold"))
+            else:
+                btn.config(bg=self.SIDEBAR_BG, font=("Segoe UI", 10))
+
+    def _on_nav_enter(self, btn):
+        if btn.cget("bg") != self.SIDEBAR_ACTIVE:
+            btn.config(bg=self.SIDEBAR_HOVER)
+
+    def _on_nav_leave(self, btn, key):
+        if key == self._active_key:
+            btn.config(bg=self.SIDEBAR_ACTIVE)
+        else:
+            btn.config(bg=self.SIDEBAR_BG)
+
+    def logout(self):
+        if messagebox.askyesno("Logout", "အကောင့်မှ ထွက်ရန် သေချာပါသလား?"):
+            self.destroy()
+            from views.login_view import LoginWindow
+            import config
+
+            config.init_db()
+            login = LoginWindow()
+            login.mainloop()
+            if login.user:
+                app = MainDashboard(login.user)
+                app.mainloop()
