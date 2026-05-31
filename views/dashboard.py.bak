@@ -14,7 +14,6 @@ from views.role_mgmt_view import RoleMgmtView
 from views.role_management import RoleManagementView
 from models.role_model import user_can
 
-# ယခု ဖိုင်အသစ်များမှ Class များကို Import လုပ်ထားပါသည်
 from views.inletter_query import InLetterQuery
 from views.outletter_query import OutLetterQuery
 
@@ -158,19 +157,14 @@ class MainDashboard(tk.Tk):
 
     # ------------------------------------------------------------------ MVC nav registry
     def _get_nav_items(self):
-        """Navigation map: key -> View class"""
+        """Navigation map: key -> View class (Model logic stays in models/)."""
         items = [
             {"key": "inletter", "label": "  Inletter", "title": "ဝင်စာရင်းသွင်းဖောင်", "subtitle": "Inletter Entry"},
             {"key": "outletter", "label": "  Outletter", "title": "ထွက်စာရင်းသွင်းဖောင်", "subtitle": "Outletter Entry"},
             {"key": "doctype", "label": "  Doc Type", "title": "စာရွက်စာတမ်းအမျိုးအစား", "subtitle": "Document Type"},
             {"key": "action", "label": "  Action", "title": "လုပ်ငန်းစဉ်မှတ်တမ်း", "subtitle": "Action & Process"},
             {"key": "department", "label": "  Department", "title": "ဌာနဆိုင်ရာမှတ်တမ်း", "subtitle": "Department Entry"},
-            
-            # ပြင်ဆင်ချက် - Key များ ထပ်မနေစေရန် သီးခြားစီ ခွဲထုတ်သတ်မှတ်ပေးလိုက်ပါသည်
             {"key": "query", "label": "  Query / Report", "title": "စာရှာဖွေ / Report", "subtitle": "Search & Export"},
-            {"key": "inletter_query", "label": "  Inletter Query", "title": "ဝင်စာ ရှာဖွေခြင်း", "subtitle": "Search Inletters"},
-            {"key": "outletter_query", "label": "  Outletter Query", "title": "ထွက်စာ ရှာဖွေခြင်း", "subtitle": "Search Outletters"},
-            
             {"key": "rows", "label": "  Row Management", "title": "စာရင်းအတန်းစီမံခန့်ခွဲမှု", "subtitle": "Edit & Delete Rows"},
         ]
         if user_can(self.current_user, "can_manage_users"):
@@ -197,12 +191,9 @@ class MainDashboard(tk.Tk):
             "doctype": (DoctypeView, {}),
             "action": (ActionView, {}),
             "department": (DeptView, {}),
-            
-            # ပြင်ဆင်ချက် - Sidebar ခလုတ်တစ်ခုချင်းစီအလိုက် သက်ဆိုင်ရာ View Class များကို မှန်ကန်စွာ ညွှန်းပေးထားပါသည်
             "query": (MainQueryView, {"current_user": self.current_user}),
-            "inletter_query": (InLetterQuery, {"current_user": self.current_user}),
-            "outletter_query": (OutLetterQuery, {"current_user": self.current_user}),
-            
+            "query": (InLetterQuery, {"current_user": self.current_user}),
+            "query": (OutLetterQuery, {"current_user": self.current_user}),
             "rows": (RoleManagementView, {"current_user": self.current_user}),
             "users": (AccessMgmtView, {"current_user": self.current_user}),
             "roles": (RoleMgmtView, {"current_user": self.current_user}),

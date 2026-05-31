@@ -21,6 +21,20 @@ PERMISSION_LABELS = {
     "can_view_reports": "Query / Reports",
 }
 
+DEPT_PERMISSION_KEYS = (
+    "can_view_inletter",
+    "can_write_inletter",
+    "can_view_outletter",
+    "can_write_outletter",
+)
+
+DEPT_PERMISSION_LABELS = {
+    "can_view_inletter": "View Inletter",
+    "can_write_inletter": "Write Inletter",
+    "can_view_outletter": "View Outletter",
+    "can_write_outletter": "Write Outletter",
+}
+
 DEFAULT_ROLES = [
     {
         "role_name": "admin",
@@ -68,6 +82,135 @@ def user_can(user, permission_key):
     if perms:
         return bool(perms.get(permission_key, False))
     return user.get("role") == "admin"
+
+
+def _dept_row_to_permissions(row):
+    if not row:
+        return {k: False for k in DEPT_PERMISSION_KEYS}
+    return {k: bool(row.get(k, 0)) for k in DEPT_PERMISSION_KEYS}
+
+
+def fetch_department_permissions(role_name, departments):
+    if isinstance(departments, str):
+        departments = [departments]
+    if not departments:
+        return {k: False for k in DEPT_PERMISSION_KEYS}
+    conn = get_db_connection()
+    if not conn:
+        return {k: False for k in DEPT_PERMISSION_KEYS}
+    try:
+        cursor = conn.cursor(dictionary=True)
+        if len(departments) == 1:
+            cols = ", ".join(DEPT_PERMISSION_KEYS)
+            cursor.execute(
+                f"SELECT {cols} FROM department_role_permissions WHERE role_name = %s AND department = %s",
+                (role_name, departments[0]),
+            )
+            return _dept_row_to_permissions(cursor.fetchone())
+        placeholders = ", ".join(["%s"] * len(departments))
+        cols = ", ".join(DEPT_PERMISSION_KEYS)
+        cursor.execute(
+            f"SELECT {cols} FROM department_role_permissions WHERE role_name = %s AND department IN ({placeholders})",
+            [role_name] + departments,
+        )
+        rows = cursor.fetchall()
+        if not rows or len(rows) < len(departments):
+            return {k: False for k in DEPT_PERMISSION_KEYS}
+        common = {k: True for k in DEPT_PERMISSION_KEYS}
+        for row in rows:
+            for key in DEPT_PERMISSION_KEYS:
+                common[key] = common[key] and bool(row.get(key, 0))
+        return common
+    except Exception as e:
+        messagebox.showerror("Model Error", str(e))
+        return {k: False for k in DEPT_PERMISSION_KEYS}
+    finally:
+        conn.close()
+
+
+def fetch_all_department_role_permissions():
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cols = ", ".join(["role_name", "department"] + list(DEPT_PERMISSION_KEYS))
+        cursor.execute(f"SELECT {cols} FROM department_role_permissions ORDER BY role_name, department")
+        return cursor.fetchall()
+    except Exception as e:
+        messagebox.showerror("Model Error", f"Could not load department role permissions: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def _dept_permission_type(row):
+    if not row:
+        return "None"
+    write = bool(row.get("can_write_inletter") or row.get("can_write_outletter"))
+    view = bool(row.get("can_view_inletter") or row.get("can_view_outletter"))
+    if write:
+        return "Write"
+    if view:
+        return "View Only"
+    return "None"
+
+
+def fetch_role_department_summaries():
+    rows = fetch_all_department_role_permissions()
+    summaries = {}
+    for row in rows:
+        role = row.get("role_name")
+        if role not in summaries:
+            summaries[role] = {
+                "departments": [],
+                "permission_types": set(),
+            }
+        summaries[role]["departments"].append(row.get("department") or "")
+        summaries[role]["permission_types"].add(_dept_permission_type(row))
+    result = {}
+    for role, info in summaries.items():
+        perms = info["permission_types"]
+        if not perms:
+            perm_label = "None"
+        elif len(perms) == 1:
+            perm_label = next(iter(perms))
+        else:
+            perm_label = "Mixed"
+        result[role] = {
+            "departments": ", ".join(sorted([d for d in info["departments"] if d])),
+            "dept_permissions": perm_label,
+        }
+    return result
+
+
+def save_department_permissions(role_name, departments, permissions):
+    if isinstance(departments, str):
+        departments = [departments]
+    if not departments:
+        return False
+    conn = get_db_connection()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        cols = ", ".join(DEPT_PERMISSION_KEYS)
+        placeholders = ", ".join(["%s"] * len(DEPT_PERMISSION_KEYS))
+        set_clause = ", ".join([f"{k}=VALUES({k})" for k in DEPT_PERMISSION_KEYS])
+        query = (
+            f"INSERT INTO department_role_permissions (role_name, department, {cols}) VALUES (%s, %s, {placeholders}) "
+            f"ON DUPLICATE KEY UPDATE {set_clause}"
+        )
+        vals = [1 if permissions.get(k) else 0 for k in DEPT_PERMISSION_KEYS]
+        params = [[role_name, department] + vals for department in departments]
+        cursor.executemany(query, params)
+        conn.commit()
+        return True
+    except Exception as e:
+        messagebox.showerror("Model Error", str(e))
+        return False
+    finally:
+        conn.close()
 
 
 def fetch_all_roles():

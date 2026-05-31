@@ -11,6 +11,8 @@ DB_CONFIG = {
     "charset": "utf8mb4"
 }
 
+DEFAULT_DEPARTMENTS = [f"Department-{i}" for i in range(1, 11)]
+
 def hash_password(password, username=""):
     raw = f"{username}:{password}".encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
@@ -74,6 +76,14 @@ def init_db():
                 address TEXT, email VARCHAR(100), phone VARCHAR(50), remark TEXT
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
+        for dept_name in DEFAULT_DEPARTMENTS:
+            cursor.execute("SELECT file_id FROM department WHERE dept_name = %s", (dept_name,))
+            if not cursor.fetchone():
+                cursor.execute(
+                    "INSERT INTO department (dept_name, dept_type, dept_level, address, email, phone, remark) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (dept_name, "General", "Level 1", "", "", "", "Seeded default department."),
+                )
+
         # Roles Table (permissions)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS roles (
@@ -88,6 +98,20 @@ def init_db():
                 can_view_reports TINYINT(1) DEFAULT 1
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS department_role_permissions (
+                perm_id INT AUTO_INCREMENT PRIMARY KEY,
+                role_name VARCHAR(50) NOT NULL,
+                department VARCHAR(255) NOT NULL,
+                can_view_inletter TINYINT(1) DEFAULT 0,
+                can_write_inletter TINYINT(1) DEFAULT 0,
+                can_view_outletter TINYINT(1) DEFAULT 0,
+                can_write_outletter TINYINT(1) DEFAULT 0,
+                UNIQUE KEY uniq_role_dept (role_name, department)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        """)
+
         from models.role_model import seed_default_roles
         seed_default_roles(cursor)
 

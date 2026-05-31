@@ -20,11 +20,36 @@ class InletterView(ttk.Frame):
         user_dept = get_user_department(self.current_user)
         admin = is_admin(self.current_user)
 
-        form_frame = ttk.LabelFrame(self, text=" ဝင်စာစာရင်းသွင်းဖောင် (Inletter Entry) ")
-        form_frame.pack(fill="x", padx=15, pady=10)
+        # Create a canvas with a single scrollbar for the whole page
+        self.canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=scrollbar.set)
+
+        scrollbar.pack(side="right", fill="y")
+        self.canvas.pack(side="left", fill="both", expand=True)
+
+        # Create a frame inside the canvas to hold all content
+        self.scrollable_frame = ttk.Frame(self.canvas)
+        self.window_id = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda event: self.canvas.configure(scrollregion=self.canvas.bbox("all")),
+        )
+        self.canvas.bind(
+            "<Configure>",
+            lambda event: self.canvas.itemconfig(self.window_id, width=event.width),
+        )
+
+        # Bind mouse wheel to scroll
+        self.canvas.bind_all("<MouseWheel>", lambda event: self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units"))
+
+        # Build the form inside the scrollable frame
+        form_frame = ttk.LabelFrame(self.scrollable_frame, text=" ဝင်စာစာရင်းသွင်းဖောင် (Inletter Entry) ")
+        form_frame.pack(fill="both", expand=True, padx=15, pady=10)
 
         frame = ttk.Frame(form_frame)
-        frame.pack(fill="x", padx=15, pady=15)
+        frame.pack(fill="both", expand=True, padx=15, pady=15)
 
         ttk.Label(frame, text="Letter Date:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
         self.ent_date = ttk.Entry(frame, width=30)
@@ -89,20 +114,40 @@ class InletterView(ttk.Frame):
         hint = "Admin: all departments  |  Staff: only your department's inletters"
         if not admin and user_dept:
             hint = f"Your department: {user_dept} — you only see inletters for this department."
-        ttk.Label(self, text=hint, font=("Segoe UI", 9), foreground="#475569").pack(anchor="w", padx=20)
+        ttk.Label(self.scrollable_frame, text=hint, font=("Segoe UI", 9), foreground="#475569").pack(anchor="w", padx=20)
 
-        list_frame = ttk.LabelFrame(self, text=" Inletters (department-filtered) ")
+        list_frame = ttk.LabelFrame(self.scrollable_frame, text=" Inletters (department-filtered) ")
         list_frame.pack(fill="both", expand=True, padx=15, pady=10)
 
         cols = ("file_id", "letter_date", "title", "dept_from", "recipient", "owner_department")
-        sy = ttk.Scrollbar(list_frame, orient="vertical")
-        sy.pack(side="right", fill="y")
-        self.tree = ttk.Treeview(list_frame, columns=cols, show="headings", yscrollcommand=sy.set, height=8)
+        self.tree = ttk.Treeview(list_frame, columns=cols, show="headings", height=8)
         self.tree.pack(fill="both", expand=True, padx=5, pady=5)
-        sy.config(command=self.tree.yview)
         for c, h in zip(cols, ["ID", "Date", "Title", "From", "Recipient", "Department"]):
             self.tree.heading(c, text=h)
             self.tree.column(c, width=120 if c != "title" else 200)
+
+        # Footer
+        footer_frame = ttk.Frame(self.scrollable_frame)
+        footer_frame.pack(fill="x", side="bottom", padx=15, pady=(5, 10))
+        
+        separator = ttk.Separator(footer_frame, orient="horizontal")
+        separator.pack(fill="x", pady=(0, 5))
+        
+        footer_label = ttk.Label(
+            footer_frame,
+            text="© 2024 Document Management System (DMS) | Inletter Module",
+            font=("Segoe UI", 8),
+            foreground="#64748b"
+        )
+        footer_label.pack(side="left")
+        
+        version_label = ttk.Label(
+            footer_frame,
+            text="v1.0",
+            font=("Segoe UI", 8),
+            foreground="#94a3b8"
+        )
+        version_label.pack(side="right")
 
     def refresh_data(self):
         self.load_records()

@@ -1,7 +1,7 @@
 # models/user_model.py
 import mysql.connector
 from config import get_db_connection, hash_password
-from models.role_model import get_permissions_for_role, get_role_names
+from models.role_model import get_permissions_for_role, get_role_names, fetch_department_permissions
 from tkinter import messagebox
 
 
@@ -48,6 +48,9 @@ def authenticate(username, password):
         user["email"] = user.get("email") or ""
         user["department"] = user.get("department") or ""
         user["permissions"] = get_permissions_for_role(user.get("role", "user"))
+        user["department_permissions"] = fetch_department_permissions(
+            user.get("role", "user"), user.get("department", "")
+        )
         return user
     except Exception as e:
         messagebox.showerror("Model Error", str(e))
