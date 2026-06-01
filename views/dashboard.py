@@ -70,16 +70,54 @@ class MainDashboard(tk.Tk):
         ).pack(side="left", padx=20, pady=12)
 
         name = self.current_user.get("full_name") or self.current_user.get("username")
+        # Right-side header group: user label, Users and Roles quick buttons, Logout
+        right_group = tk.Frame(self.header, bg="#ffffff")
+        right_group.pack(side="right", padx=12, pady=8)
+
         tk.Label(
-            self.header,
+            right_group,
             text=f"{name}  ·  {self.role}",
             font=("Segoe UI", 10),
             bg="#ffffff",
             fg="#64748b",
-        ).pack(side="right", padx=(0, 8), pady=12)
+        ).pack(side="left", padx=(0, 12), pady=6)
+
+        # Quick-access: User Management (visible to permitted users)
+        if user_can(self.current_user, "can_manage_users"):
+            tk.Button(
+                right_group,
+                text="Users",
+                font=("Segoe UI", 9),
+                bg="#059669",
+                fg="white",
+                activebackground="#047857",
+                activeforeground="white",
+                relief="flat",
+                padx=8,
+                pady=4,
+                cursor="hand2",
+                command=lambda: self.show_view("users"),
+            ).pack(side="left", padx=(0, 8), pady=6)
+
+        # Quick-access: Role Management (visible to permitted users)
+        if user_can(self.current_user, "can_manage_roles"):
+            tk.Button(
+                right_group,
+                text="Roles",
+                font=("Segoe UI", 9),
+                bg="#2563eb",
+                fg="white",
+                activebackground="#1e40af",
+                activeforeground="white",
+                relief="flat",
+                padx=8,
+                pady=4,
+                cursor="hand2",
+                command=lambda: self.show_view("roles"),
+            ).pack(side="left", padx=(0, 8), pady=6)
 
         tk.Button(
-            self.header,
+            right_group,
             text="Logout",
             font=("Segoe UI", 9),
             bg="#ef4444",
@@ -91,7 +129,7 @@ class MainDashboard(tk.Tk):
             pady=4,
             cursor="hand2",
             command=self.logout,
-        ).pack(side="right", padx=20, pady=12)
+        ).pack(side="left", padx=(8, 0), pady=6)
 
         # Body: sidebar (left) + main content (right)
         body = tk.Frame(self, bg=self.CONTENT_BG)
@@ -173,13 +211,7 @@ class MainDashboard(tk.Tk):
             
             {"key": "rows", "label": "  Row Management", "title": "စာရင်းအတန်းစီမံခန့်ခွဲမှု", "subtitle": "Edit & Delete Rows"},
         ]
-        if user_can(self.current_user, "can_manage_users"):
-            items.append({
-                "key": "users",
-                "label": "  User Management",
-                "title": "အသုံးပြုသူစီမံခန့်ခွဲမှု",
-                "subtitle": "Create & manage user accounts",
-            })
+        # `users` is moved to the top header quick-access buttons; keep view factory mapping.
         if user_can(self.current_user, "can_manage_roles"):
             items.append({
                 "key": "roles",

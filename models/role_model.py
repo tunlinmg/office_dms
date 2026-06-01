@@ -1,7 +1,13 @@
 # models/role_model.py
 import mysql.connector
+import logging
 from config import get_db_connection
 from tkinter import messagebox
+
+# Configure module logger; write errors to dms_errors.log for debugging
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    logging.basicConfig(filename="dms_errors.log", level=logging.ERROR, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 PERMISSION_KEYS = (
     "can_manage_users",
@@ -79,7 +85,8 @@ def user_can(user, permission_key):
     if not user:
         return False
     perms = user.get("permissions")
-    if perms:
+    # Treat an explicit permissions dict (even empty) as authoritative.
+    if perms is not None:
         return bool(perms.get(permission_key, False))
     return user.get("role") == "admin"
 
@@ -94,36 +101,30 @@ def fetch_department_permissions(role_name, departments):
     if isinstance(departments, str):
         departments = [departments]
     if not departments:
-        return {k: False for k in DEPT_PERMISSION_KEYS}
+        return {}
     conn = get_db_connection()
     if not conn:
-        return {k: False for k in DEPT_PERMISSION_KEYS}
+        return {d: {k: False for k in DEPT_PERMISSION_KEYS} for d in departments}
     try:
         cursor = conn.cursor(dictionary=True)
-        if len(departments) == 1:
-            cols = ", ".join(DEPT_PERMISSION_KEYS)
-            cursor.execute(
-                f"SELECT {cols} FROM department_role_permissions WHERE role_name = %s AND department = %s",
-                (role_name, departments[0]),
-            )
-            return _dept_row_to_permissions(cursor.fetchone())
+        cols = ", ".join(["department"] + list(DEPT_PERMISSION_KEYS))
         placeholders = ", ".join(["%s"] * len(departments))
-        cols = ", ".join(DEPT_PERMISSION_KEYS)
         cursor.execute(
             f"SELECT {cols} FROM department_role_permissions WHERE role_name = %s AND department IN ({placeholders})",
             [role_name] + departments,
         )
         rows = cursor.fetchall()
-        if not rows or len(rows) < len(departments):
-            return {k: False for k in DEPT_PERMISSION_KEYS}
-        common = {k: True for k in DEPT_PERMISSION_KEYS}
-        for row in rows:
-            for key in DEPT_PERMISSION_KEYS:
-                common[key] = common[key] and bool(row.get(key, 0))
-        return common
+        # Build mapping for requested departments. Missing rows are treated as all-false.
+        found = {row.get("department"): row for row in rows} if rows else {}
+        result = {}
+        for d in departments:
+            row = found.get(d)
+            result[d] = _dept_row_to_permissions(row)
+        return result
     except Exception as e:
-        messagebox.showerror("Model Error", str(e))
-        return {k: False for k in DEPT_PERMISSION_KEYS}
+        logger.exception("Error fetching department permissions for %s %s", role_name, departments)
+        messagebox.showerror("Database Error", "Could not load department permissions. Contact administrator.")
+        return {d: {k: False for k in DEPT_PERMISSION_KEYS} for d in departments}
     finally:
         conn.close()
 
@@ -138,7 +139,8 @@ def fetch_all_department_role_permissions():
         cursor.execute(f"SELECT {cols} FROM department_role_permissions ORDER BY role_name, department")
         return cursor.fetchall()
     except Exception as e:
-        messagebox.showerror("Model Error", f"Could not load department role permissions: {e}")
+        logger.exception("Could not load department role permissions")
+        messagebox.showerror("Database Error", "Could not load department permissions. Contact administrator.")
         return []
     finally:
         conn.close()
@@ -196,18 +198,20 @@ def save_department_permissions(role_name, departments, permissions):
         cursor = conn.cursor()
         cols = ", ".join(DEPT_PERMISSION_KEYS)
         placeholders = ", ".join(["%s"] * len(DEPT_PERMISSION_KEYS))
-        set_clause = ", ".join([f"{k}=VALUES({k})" for k in DEPT_PERMISSION_KEYS])
+        # Avoid using deprecated VALUES() - repeat values in the ON DUPLICATE KEY UPDATE clause
+        update_clause = ", ".join([f"{k}=%s" for k in DEPT_PERMISSION_KEYS])
         query = (
             f"INSERT INTO department_role_permissions (role_name, department, {cols}) VALUES (%s, %s, {placeholders}) "
-            f"ON DUPLICATE KEY UPDATE {set_clause}"
+            f"ON DUPLICATE KEY UPDATE {update_clause}"
         )
         vals = [1 if permissions.get(k) else 0 for k in DEPT_PERMISSION_KEYS]
-        params = [[role_name, department] + vals for department in departments]
+        params = [[role_name, department] + vals + vals for department in departments]
         cursor.executemany(query, params)
         conn.commit()
         return True
     except Exception as e:
-        messagebox.showerror("Model Error", str(e))
+        logger.exception("Error saving department permissions for %s %s", role_name, departments)
+        messagebox.showerror("Database Error", "Could not save department permissions. Contact administrator.")
         return False
     finally:
         conn.close()
@@ -223,7 +227,8 @@ def fetch_all_roles():
         cursor.execute(f"SELECT {cols} FROM roles ORDER BY role_id")
         return cursor.fetchall()
     except Exception as e:
-        messagebox.showerror("Model Error", f"Could not load roles: {e}")
+        logger.exception("Could not load roles")
+        messagebox.showerror("Database Error", "Could not load roles. Contact administrator.")
         return []
     finally:
         conn.close()
@@ -239,7 +244,8 @@ def get_role_by_name(role_name):
         cursor.execute(f"SELECT {cols} FROM roles WHERE role_name = %s", (role_name,))
         return cursor.fetchone()
     except Exception as e:
-        messagebox.showerror("Model Error", str(e))
+        logger.exception("Could not get role by name %s", role_name)
+        messagebox.showerror("Database Error", "Could not load role data. Contact administrator.")
         return None
     finally:
         conn.close()
@@ -248,9 +254,11 @@ def get_role_by_name(role_name):
 def get_permissions_for_role(role_name):
     row = get_role_by_name(role_name)
     if not row:
+        logger.warning("Role '%s' not found; falling back to defaults", role_name)
         fallback = next((r for r in DEFAULT_ROLES if r["role_name"] == role_name), None)
         if fallback:
             return _row_to_permissions(fallback)
+        # If no explicit fallback is present, return the 'user' role defaults
         return _row_to_permissions(DEFAULT_ROLES[1])
     return _row_to_permissions(row)
 
@@ -276,7 +284,8 @@ def insert_role(role_name, description, permissions):
         conn.commit()
         return True
     except Exception as e:
-        messagebox.showerror("Model Error", str(e))
+        logger.exception("Could not insert role %s", role_name)
+        messagebox.showerror("Database Error", "Could not create role. Contact administrator.")
         return False
     finally:
         conn.close()
@@ -296,7 +305,8 @@ def update_role(role_id, role_name, description, permissions):
         conn.commit()
         return True
     except Exception as e:
-        messagebox.showerror("Model Error", str(e))
+        logger.exception("Could not update role %s", role_name)
+        messagebox.showerror("Database Error", "Could not update role. Contact administrator.")
         return False
     finally:
         conn.close()
@@ -319,7 +329,8 @@ def delete_role(role_id, role_name):
         conn.commit()
         return True
     except Exception as e:
-        messagebox.showerror("Model Error", str(e))
+        logger.exception("Could not delete role %s", role_name)
+        messagebox.showerror("Database Error", "Could not delete role. Contact administrator.")
         return False
     finally:
         conn.close()

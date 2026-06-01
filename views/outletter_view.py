@@ -1,6 +1,7 @@
 # views/outletter_view.py
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from tkcalendar import DateEntry
 
 from models.outletter_model import insert_outletter, fetch_outletters
 from models.dept_model import fetch_department_names
@@ -50,7 +51,7 @@ class OutletterView(ttk.Frame):
         form_frame.pack(fill="x", padx=15, pady=10)
 
         ttk.Label(form_frame, text="Letter Date:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
-        self.ent_date = ttk.Entry(form_frame, width=30)
+        self.ent_date = DateEntry(form_frame, width=28, date_pattern="yyyy-mm-dd")
         self.ent_date.grid(row=0, column=1, padx=10, pady=5)
 
         ttk.Label(form_frame, text="Letter Type:").grid(row=1, column=0, sticky="w", padx=10, pady=5)

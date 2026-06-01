@@ -3,8 +3,9 @@
 ## 1. Prerequisites
 Before running the application, ensure you have the required Python package installed:
 ```bash
-###pip install mysql-connector-python
-pip install mysql-connector-python tkcalendar matplotlib
+pip install mysql-connector-python
+pip install matplotlib
+pip install tkcalendar
 ```
 
 ## 2. Project Structure

@@ -231,8 +231,11 @@ class RoleMgmtView(ttk.Frame):
             self.lbl_selected_role.config(text="None")
 
     def _set_department_permission_checkboxes(self, permissions):
+        # `permissions` may be a dict mapping permission_key->bool or permission_key->None (mixed)
         for k, var in self._dept_perm_vars.items():
-            var.set(1 if permissions.get(k) else 0)
+            val = permissions.get(k)
+            # Treat None (mixed) as unchecked in the UI; status label will indicate mixed state
+            var.set(1 if val else 0)
 
     def _load_selected_role_department_permissions(self):
         if not self.selected_role_name:
@@ -249,18 +252,38 @@ class RoleMgmtView(ttk.Frame):
             )
             self._set_department_permission_checkboxes({})
             return
+        # fetch_department_permissions now returns a mapping: { department: {perm_key: bool} }
+        per_dept = fetch_department_permissions(self.selected_role_name, departments)
+        # Aggregate across selected departments to determine common/mixed permissions
+        aggregated = {}
+        mixed_keys = []
+        for k in DEPT_PERMISSION_KEYS:
+            vals = [per_dept.get(d, {}).get(k, False) for d in departments]
+            if all(vals):
+                aggregated[k] = True
+            elif any(vals):
+                aggregated[k] = False
+                mixed_keys.append(k)
+            else:
+                aggregated[k] = False
 
-        perms = fetch_department_permissions(self.selected_role_name, departments)
-        self._set_department_permission_checkboxes(perms)
-        enabled = [DEPT_PERMISSION_LABELS[k] for k, v in perms.items() if v]
-        if enabled:
+        self._set_department_permission_checkboxes(aggregated)
+
+        if mixed_keys:
+            mixed_labels = [DEPT_PERMISSION_LABELS[k] for k in mixed_keys]
             self.lbl_role_dept_status.config(
-                text=f"Active permissions for {self.selected_role_name}: {', '.join(enabled)}"
+                text=f"Mixed permissions across selected departments: {', '.join(mixed_labels)}"
             )
         else:
-            self.lbl_role_dept_status.config(
-                text=f"No active department permissions set for {self.selected_role_name} on selected departments."
-            )
+            enabled = [DEPT_PERMISSION_LABELS[k] for k, v in aggregated.items() if v]
+            if enabled:
+                self.lbl_role_dept_status.config(
+                    text=f"Active permissions for {self.selected_role_name}: {', '.join(enabled)}"
+                )
+            else:
+                self.lbl_role_dept_status.config(
+                    text=f"No active department permissions set for {self.selected_role_name} on selected departments."
+                )
 
     def load_roles(self):
         if not hasattr(self, "tree"):
@@ -466,9 +489,11 @@ class RoleMgmtView(ttk.Frame):
                 for k in DEPT_PERMISSION_KEYS:
                     dept_edit_vars[k].set(0)
                 return
-            perms = fetch_department_permissions(row["role_name"], departments)
-            for k, v in perms.items():
-                dept_edit_vars[k].set(1 if v else 0)
+            per_dept = fetch_department_permissions(row["role_name"], departments)
+            # Aggregate: set checkbox if permission is True for all selected departments
+            for k in DEPT_PERMISSION_KEYS:
+                vals = [per_dept.get(d, {}).get(k, False) for d in departments]
+                dept_edit_vars[k].set(1 if all(vals) else 0)
 
         for var in dept_selection_vars.values():
             var.trace_add("write", load_department_permissions)

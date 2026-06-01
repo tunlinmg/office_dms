@@ -1,6 +1,7 @@
 # views/inletter_view.py
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from tkcalendar import DateEntry
 
 from models.inletter_model import insert_inletter, fetch_inletters
 from models.dept_model import fetch_department_names
@@ -52,11 +53,11 @@ class InletterView(ttk.Frame):
         frame.pack(fill="both", expand=True, padx=15, pady=15)
 
         ttk.Label(frame, text="Letter Date:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
-        self.ent_date = ttk.Entry(frame, width=30)
+        self.ent_date = DateEntry(frame, width=28, date_pattern="yyyy-mm-dd")
         self.ent_date.grid(row=0, column=1, padx=10, pady=5)
 
         ttk.Label(frame, text="Send Date:").grid(row=1, column=0, sticky="w", padx=10, pady=5)
-        self.ent_send = ttk.Entry(frame, width=30)
+        self.ent_send = DateEntry(frame, width=28, date_pattern="yyyy-mm-dd")
         self.ent_send.grid(row=1, column=1, padx=10, pady=5)
 
         ttk.Label(frame, text="Letter Type:").grid(row=2, column=0, sticky="w", padx=10, pady=5)

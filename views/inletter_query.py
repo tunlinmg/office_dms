@@ -4,9 +4,6 @@ from tkinter import ttk, messagebox
 import mysql.connector
 from config import get_db_connection
 from models.user_model import apply_department_sql
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from collections import Counter
 
 # 1. Dashboard က လှမ်းခေါ်မည့် Class နာမည်ကို တိကျစွာ သတ်မှတ်ခြင်း
 class InLetterQuery(ttk.Frame):
@@ -87,74 +84,12 @@ class InLetterQuery(ttk.Frame):
         table_frame.grid_columnconfigure(0, weight=1)
         table_frame.grid_rowconfigure(0, weight=1)
 
-        # Scale Bar (Up/Down)
-        scale_frame = ttk.Frame(self)
-        scale_frame.pack(side="bottom", fill="x", padx=10, pady=(0, 5))
-        
-        ttk.Label(scale_frame, text="အတိုးအလွှာ:").pack(side="left", padx=(0, 5))
-        self.scale_var = tk.IntVar(value=100)
-        self.scale_bar = ttk.Scale(scale_frame, from_=50, to=200, orient="horizontal", variable=self.scale_var, command=self._on_scale_change)
-        self.scale_bar.pack(side="left", fill="x", expand=True, padx=5)
-        self.scale_label = ttk.Label(scale_frame, text="100%")
-        self.scale_label.pack(side="left", padx=(5, 0))
-        
-        # Up/Down Buttons
-        btn_up = ttk.Button(scale_frame, text="▲ Up", command=self._scale_up)
-        btn_up.pack(side="left", padx=(10, 2))
-        btn_down = ttk.Button(scale_frame, text="▼ Down", command=self._scale_down)
-        btn_down.pack(side="left", padx=2)
-
-        # Graph Display Area
-        self.graph_frame = ttk.LabelFrame(self, text=" စာအမျိုးအစား ဇယား ", padding=10)
-        self.graph_frame.pack(side="bottom", fill="x", padx=10, pady=10)
-
-        # Action Buttons Frame
-        action_frame = ttk.LabelFrame(self, text=" Actions ", padding=10)
-        action_frame.pack(side="bottom", fill="x", padx=10, pady=10)
-
-        btn_view = ttk.Button(action_frame, text="👁 View", command=self.action_view)
-        btn_view.pack(side="left", padx=10)
-
-        btn_edit = ttk.Button(action_frame, text="✏ Edit", command=self.action_edit)
-        btn_edit.pack(side="left", padx=10)
-
-        btn_delete = ttk.Button(action_frame, text="❌ Delete", command=self.action_delete)
-        btn_delete.pack(side="left", padx=10)
-
     def _clear_filters(self):
         """ရှာဖွေရေး အကွက်များကို ရှင်းလင်းခြင်း"""
         self.ent_file_id.delete(0, tk.END)
         self.ent_type.delete(0, tk.END)
         self.ent_title.delete(0, tk.END)
         self.refresh_data()
-
-    def get_selected_file_id(self):
-        """Treeview မှ ရွေးချယ်ထားသော အတန်း၏ file_id ကို ပြန်ပေးခြင်း"""
-        selected_item = self.tree.focus()
-        if not selected_item:
-            messagebox.showwarning("Warning", "ကျေးဇူးပြု၍ ဇယားထဲမှ အတန်းတစ်ခုကို ရွေးချယ်ပါ။")
-            return None
-        item_values = self.tree.item(selected_item, "values")
-        return item_values[0] if item_values else None
-
-    def action_view(self):
-        """ရွေးချယ်ထားသော စာရင်းအချက်အလက်ကို ကြည့်ရှုရန်"""
-        file_id = self.get_selected_file_id()
-        if file_id:
-            messagebox.showinfo("View Action", f"Viewing record with ID: {file_id}")
-
-    def action_edit(self):
-        """ရွေးချယ်ထားသော စာရင်းအချက်အလက်ကို ပြင်ဆင်ရန်"""
-        file_id = self.get_selected_file_id()
-        if file_id:
-            messagebox.showinfo("Edit Action", f"Editing record with ID: {file_id}")
-
-    def action_delete(self):
-        """ရွေးချယ်ထားသော စာရင်းအချက်အလက်ကို ဖျက်သိမ်းရန်"""
-        file_id = self.get_selected_file_id()
-        if file_id:
-            if messagebox.askyesno("Delete Action", f"Are you sure you want to delete record {file_id}?"):
-                messagebox.showinfo("Delete Action", f"Deleting record with ID: {file_id}")
 
     def build_inletter_query(self, file_id=None, letter_type=None, title=None):
         """Database Query စာသားအား သုံးစွဲသူ Permission အလိုက် တည်ဆောက်ခြင်း"""
@@ -211,68 +146,3 @@ class InLetterQuery(ttk.Frame):
             messagebox.showerror("Database Error", f"အချက်အလက်ရှာဖွေရယူခြင်း မအောင်မြင်ပါ-\n{str(e)}")
         finally:
             conn.close()
-
-        # Update graph after data refresh
-        self.draw_graph()
-
-    def draw_graph(self):
-        """စာအမျိုးအစားအလိုက် အရေအတွက်ကို Bar Chart ဖြင့် ပြသခြင်း"""
-        # Clear previous graph widgets
-        for widget in self.graph_frame.winfo_children():
-            widget.destroy()
-
-        # Extract letter types from Treeview
-        letter_types = []
-        for item_id in self.tree.get_children():
-            item_values = self.tree.item(item_id, "values")
-            if len(item_values) > 3:
-                letter_types.append(item_values[3])
-
-        if not letter_types:
-            ttk.Label(self.graph_frame, text="No data for graph").pack()
-            return
-
-        # Count occurrences
-        type_counts = Counter(letter_types)
-
-        # Plotting
-        fig, ax = plt.subplots(figsize=(8, 4))
-        ax.bar(type_counts.keys(), type_counts.values())
-        ax.set_title("စာအမျိုးအစားအလိုက် အရေအတွက်", fontfamily='Pyidaungsu')
-        ax.set_xlabel("စာအမျိုးအစား", fontfamily='Pyidaungsu')
-        ax.set_ylabel("အရေအတွက်", fontfamily='Pyidaungsu')
-        
-        # Embed in Tkinter
-        canvas = FigureCanvasTkAgg(fig, master=self.graph_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(side="top", fill="both", expand=True)
-
-    def _on_scale_change(self, value):
-        """Scale bar ပြောင်းလဲသည့်အခါ ချိန်ညှိခြင်း"""
-        scale = int(float(value))
-        self.scale_label.config(text=f"{scale}%")
-        self._apply_scale(scale)
-
-    def _scale_up(self):
-        """Scale တိုးခြင်း"""
-        current = self.scale_var.get()
-        if current < 200:
-            new_val = min(current + 10, 200)
-            self.scale_var.set(new_val)
-            self._on_scale_change(new_val)
-
-    def _scale_down(self):
-        """Scale လျှော့ခြင်း"""
-        current = self.scale_var.get()
-        if current > 50:
-            new_val = max(current - 10, 50)
-            self.scale_var.set(new_val)
-            self._on_scale_change(new_val)
-
-    def _apply_scale(self, scale):
-        """Treeview စာလုံးအရွယ်အစားကို ချိန်ညှိခြင်း"""
-        base_size = 9
-        new_size = int(base_size * scale / 100)
-        style = ttk.Style()
-        style.configure("Treeview", font=("Pyidaungsu", new_size))
-        style.configure("Treeview.Heading", font=("Pyidaungsu", new_size, "bold"))
