@@ -3,13 +3,13 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from models.user_model import fetch_all_users, insert_user, update_user, update_user_role, delete_user
+from models.user_model import fetch_all_users, insert_user, update_user, delete_user
 from models.role_model import get_role_names
 from models.dept_model import fetch_department_names
 
 
 class AccessMgmtView(ttk.Frame):
-    """User registration / management screen."""
+    """User registration / management screen with a clean split layout."""
 
     USER_COLS = ("user_id", "username", "full_name", "email", "department", "role", "is_active", "created_at")
 
@@ -18,71 +18,66 @@ class AccessMgmtView(ttk.Frame):
         self.current_user = current_user
         self.selected_id = None
         self.dept_names = fetch_department_names() or ["General Office"]
-        self.setup_ui()
+        self.active_var = tk.IntVar(value=1)
+        self._build_ui()
         self.load_users()
 
-    def setup_ui(self):
-        top = ttk.LabelFrame(self, text=" User Management ")
-        top.pack(fill="x", padx=15, pady=10)
+    def _build_ui(self):
+        toolbar = ttk.Frame(self)
+        toolbar.pack(fill="x", padx=12, pady=(12, 8))
 
-        toolbar = ttk.Frame(top)
-        toolbar.pack(fill="x", padx=10, pady=8)
+        ttk.Label(toolbar, text="User Management", font=("Segoe UI", 14, "bold")).pack(side="left")
+        button_frame = ttk.Frame(toolbar)
+        button_frame.pack(side="right")
 
-        ttk.Label(toolbar, text="Assign role:").pack(side="left", padx=(0, 4))
-        self.cb_role = ttk.Combobox(toolbar, values=get_role_names(), width=14, state="readonly")
-        self.cb_role.pack(side="left", padx=4)
-        self.cb_role.set("user")
+        ttk.Button(button_frame, text="Refresh", command=self.load_users).pack(side="left", padx=4)
+        ttk.Button(button_frame, text="Load Selected", command=self.populate_form_from_selection).pack(side="left", padx=4)
+        ttk.Button(button_frame, text="Delete", command=self.remove_user).pack(side="left", padx=4)
 
-        for text, cmd in [
-            ("Refresh", self.load_users),
-            ("Edit Selected", self.edit_user),
-            ("Assign Role", self.assign_role),
-            ("Delete Selected", self.remove_user),
-        ]:
-            ttk.Button(toolbar, text=text, command=cmd).pack(side="left", padx=4)
+        container = ttk.Frame(self)
+        container.pack(fill="both", expand=True)
 
-        add = ttk.LabelFrame(self, text=" Register New User ")
-        add.pack(fill="x", padx=15, pady=4)
-        row = ttk.Frame(add)
-        row.pack(fill="x", padx=10, pady=8)
+        canvas = tk.Canvas(container, borderwidth=0, highlightthickness=0)
+        canvas.pack(side="left", fill="both", expand=True)
 
-        ttk.Label(row, text="Username").grid(row=0, column=0, padx=4, pady=3)
-        self.ent_user = ttk.Entry(row, width=14)
-        self.ent_user.grid(row=0, column=1, padx=4, pady=3)
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        scrollbar.pack(side="right", fill="y")
+        canvas.configure(yscrollcommand=scrollbar.set)
 
-        ttk.Label(row, text="Password").grid(row=0, column=2, padx=4, pady=3)
-        self.ent_pass = ttk.Entry(row, width=14, show="*")
-        self.ent_pass.grid(row=0, column=3, padx=4, pady=3)
+        self.scrollable_frame = ttk.Frame(canvas)
+        self.canvas_window = canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
 
-        ttk.Label(row, text="Full Name").grid(row=0, column=4, padx=4, pady=3)
-        self.ent_name = ttk.Entry(row, width=16)
-        self.ent_name.grid(row=0, column=5, padx=4, pady=3)
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas.bind(
+            "<Configure>",
+            lambda e: canvas.itemconfig(self.canvas_window, width=e.width),
+        )
 
-        ttk.Label(row, text="Email").grid(row=1, column=0, padx=4, pady=3)
-        self.ent_email = ttk.Entry(row, width=14)
-        self.ent_email.grid(row=1, column=1, padx=4, pady=3)
+        list_frame = ttk.LabelFrame(self.scrollable_frame, text="Users")
+        list_frame.pack(fill="both", expand=True, padx=12, pady=(0, 8))
 
-        ttk.Label(row, text="Department").grid(row=1, column=2, padx=4, pady=3)
-        self.cb_dept = ttk.Combobox(row, values=self.dept_names, width=20)
-        self.cb_dept.grid(row=1, column=3, columnspan=2, padx=4, pady=3, sticky="w")
-        if self.dept_names:
-            self.cb_dept.set(self.dept_names[0])
+        self.status_label = ttk.Label(list_frame, text="")
+        self.status_label.pack(anchor="w", padx=8, pady=(8, 4))
 
-        ttk.Button(row, text="Add User", command=self.add_user).grid(row=1, column=5, padx=8, pady=3)
+        table_frame = ttk.Frame(list_frame)
+        table_frame.pack(fill="both", expand=True, padx=8, pady=6)
 
-        grid = ttk.LabelFrame(self, text=" Users List ")
-        grid.pack(fill="both", expand=True, padx=15, pady=8)
+        table_scrollbar = ttk.Scrollbar(table_frame, orient="vertical")
+        table_scrollbar.pack(side="right", fill="y")
 
-        self.status = ttk.Label(grid, text="")
-        self.status.pack(anchor="w", padx=8, pady=4)
-
-        wrap = ttk.Frame(grid)
-        wrap.pack(fill="both", expand=True, padx=5, pady=5)
-        sy = ttk.Scrollbar(wrap, orient="vertical")
-        sy.pack(side="right", fill="y")
-        self.tree = ttk.Treeview(wrap, columns=self.USER_COLS, show="headings", yscrollcommand=sy.set, height=14)
+        self.tree = ttk.Treeview(
+            table_frame,
+            columns=self.USER_COLS,
+            show="headings",
+            yscrollcommand=table_scrollbar.set,
+            selectmode="browse",
+            height=12,
+        )
         self.tree.pack(side="left", fill="both", expand=True)
-        sy.config(command=self.tree.yview)
+        table_scrollbar.config(command=self.tree.yview)
 
         headers = {
             "user_id": "ID",
@@ -94,13 +89,57 @@ class AccessMgmtView(ttk.Frame):
             "is_active": "Active",
             "created_at": "Created",
         }
-        for c in self.USER_COLS:
-            self.tree.heading(c, text=headers[c])
-            self.tree.column(c, width=110, anchor="center")
-        self.tree.column("email", width=150)
-        self.tree.column("department", width=130)
+        for col in self.USER_COLS:
+            self.tree.heading(col, text=headers[col])
+            self.tree.column(col, width=110, anchor="center")
+        self.tree.column("email", width=180)
+        self.tree.column("department", width=150)
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
-        self.tree.bind("<Double-1>", lambda _e: self.edit_user())
+
+        detail_panel = ttk.LabelFrame(self.scrollable_frame, text="User Details")
+        detail_panel.pack(fill="x", padx=12, pady=(0, 12))
+        detail_panel.columnconfigure(1, weight=1)
+        detail_panel.columnconfigure(3, weight=1)
+
+        ttk.Label(detail_panel, text="Username:").grid(row=0, column=0, sticky="e", padx=8, pady=6)
+        self.ent_user = ttk.Entry(detail_panel)
+        self.ent_user.grid(row=0, column=1, sticky="we", padx=8, pady=6)
+
+        ttk.Label(detail_panel, text="Password:").grid(row=0, column=2, sticky="e", padx=8, pady=6)
+        self.ent_pass = ttk.Entry(detail_panel, show="*")
+        self.ent_pass.grid(row=0, column=3, sticky="we", padx=8, pady=6)
+
+        ttk.Label(detail_panel, text="Full Name:").grid(row=1, column=0, sticky="e", padx=8, pady=6)
+        self.ent_name = ttk.Entry(detail_panel)
+        self.ent_name.grid(row=1, column=1, sticky="we", padx=8, pady=6)
+
+        ttk.Label(detail_panel, text="Email:").grid(row=1, column=2, sticky="e", padx=8, pady=6)
+        self.ent_email = ttk.Entry(detail_panel)
+        self.ent_email.grid(row=1, column=3, sticky="we", padx=8, pady=6)
+
+        ttk.Label(detail_panel, text="Department:").grid(row=2, column=0, sticky="e", padx=8, pady=6)
+        self.cb_dept = ttk.Combobox(detail_panel, values=self.dept_names)
+        self.cb_dept.grid(row=2, column=1, sticky="we", padx=8, pady=6)
+        if self.dept_names:
+            self.cb_dept.set(self.dept_names[0])
+
+        ttk.Label(detail_panel, text="Role:").grid(row=2, column=2, sticky="e", padx=8, pady=6)
+        self.cb_role = ttk.Combobox(detail_panel, values=get_role_names(), state="readonly")
+        self.cb_role.grid(row=2, column=3, sticky="we", padx=8, pady=6)
+        self.cb_role.set("user")
+
+        self.active_checkbox = ttk.Checkbutton(detail_panel, text="Active account", variable=self.active_var)
+        self.active_checkbox.grid(row=3, column=0, columnspan=2, sticky="w", padx=8, pady=(4, 10))
+
+        self.selected_label = ttk.Label(detail_panel, text="No user selected", foreground="#4b5563")
+        self.selected_label.grid(row=3, column=2, columnspan=2, sticky="w", padx=8, pady=(4, 10))
+
+        actions = ttk.Frame(detail_panel)
+        actions.grid(row=4, column=0, columnspan=4, pady=(0, 10), padx=8, sticky="w")
+        ttk.Button(actions, text="Add User", command=self.add_user).pack(side="left", padx=4)
+        ttk.Button(actions, text="Update User", command=self.update_user).pack(side="left", padx=4)
+        ttk.Button(actions, text="Clear", command=self.clear_form).pack(side="left", padx=4)
+        
 
     def refresh_data(self):
         self.load_users()
@@ -112,10 +151,10 @@ class AccessMgmtView(ttk.Frame):
         self.tree.delete(*self.tree.get_children())
         users = fetch_all_users()
         if not users:
-            self.status.config(text="No users in database.")
+            self.status_label.config(text="No users in database.")
             return
-        for u in users:
-            created = u.get("created_at", "")
+        for user in users:
+            created = user.get("created_at", "")
             if hasattr(created, "strftime"):
                 created = created.strftime("%Y-%m-%d %H:%M")
             else:
@@ -123,23 +162,21 @@ class AccessMgmtView(ttk.Frame):
             self.tree.insert(
                 "",
                 "end",
-                iid=str(u["user_id"]),
+                iid=str(user["user_id"]),
                 values=(
-                    u["user_id"],
-                    u["username"],
-                    u["full_name"],
-                    u.get("email", ""),
-                    u.get("department", ""),
-                    u["role"],
-                    "Yes" if u["is_active"] else "No",
+                    user["user_id"],
+                    user["username"],
+                    user["full_name"],
+                    user.get("email", ""),
+                    user.get("department", ""),
+                    user["role"],
+                    "Yes" if user["is_active"] else "No",
                     created,
                 ),
             )
-        self.status.config(text=f"{len(users)} user(s) loaded.")
+        self.status_label.config(text=f"{len(users)} user(s) loaded.")
 
     def _selected_id(self):
-        if self.selected_id:
-            return self.selected_id
         sel = self.tree.selection()
         if not sel:
             messagebox.showwarning("Select", "ရွေးချယ်ပါ။")
@@ -147,110 +184,89 @@ class AccessMgmtView(ttk.Frame):
         return int(sel[0])
 
     def _on_select(self, _event=None):
+        self.populate_form_from_selection()
+
+    def clear_form(self):
+        self.selected_id = None
+        self.selected_label.config(text="No user selected")
+        self.ent_user.delete(0, tk.END)
+        self.ent_pass.delete(0, tk.END)
+        self.ent_name.delete(0, tk.END)
+        self.ent_email.delete(0, tk.END)
+        self.active_var.set(1)
+        if self.dept_names:
+            self.cb_dept.set(self.dept_names[0])
+        self.cb_role.config(values=get_role_names())
+        self.cb_role.set("user")
+
+    def populate_form_from_selection(self):
         sel = self.tree.selection()
         if not sel:
+            messagebox.showwarning("Select", "Select a user to load.")
             return
-        self.selected_id = int(sel[0])
-        vals = self.tree.item(sel[0], "values")
-        if len(vals) > 5:
-            self.cb_role.set(vals[5])
-
-    def assign_role(self):
-        uid = self._selected_id()
-        if uid is None:
+        values = self.tree.item(sel[0], "values")
+        if not values:
             return
-        role = self.cb_role.get().strip().lower()
-        if update_user_role(uid, role):
-            messagebox.showinfo("Success", f"User {uid} → role '{role}'")
-            self.load_users()
-            if self.tree.exists(str(uid)):
-                self.tree.selection_set(str(uid))
+        self.selected_id = int(values[0])
+        self.selected_label.config(text=f"Selected user ID: {self.selected_id}")
+        self.ent_user.delete(0, tk.END)
+        self.ent_user.insert(0, values[1])
+        self.ent_name.delete(0, tk.END)
+        self.ent_name.insert(0, values[2])
+        self.ent_email.delete(0, tk.END)
+        self.ent_email.insert(0, values[3] if len(values) > 3 else "")
+        self.cb_dept.set(values[4] if len(values) > 4 and values[4] else (self.dept_names[0] if self.dept_names else ""))
+        self.cb_role.set(values[5] if len(values) > 5 and values[5] else "user")
+        self.active_var.set(1 if (len(values) > 6 and values[6] == "Yes") else 0)
 
     def add_user(self):
-        u = self.ent_user.get().strip()
-        p = self.ent_pass.get()
-        n = self.ent_name.get().strip()
+        username = self.ent_user.get().strip()
+        password = self.ent_pass.get()
+        full_name = self.ent_name.get().strip()
         email = self.ent_email.get().strip()
-        dept = self.cb_dept.get().strip()
+        department = self.cb_dept.get().strip()
         role = self.cb_role.get().strip().lower()
-        if not u or len(p) < 4:
+        if not username or len(password) < 4:
             messagebox.showwarning("Validation", "Username နှင့် Password (၄ လ+) ထည့်ပါ။")
             return
-        if not dept and role != "admin":
+        if not department and role != "admin":
             messagebox.showwarning("Validation", "Department ထည့်ပါ။")
             return
-        if insert_user(u, p, n, email, dept, role, 1):
+        if insert_user(username, password, full_name, email, department, role, self.active_var.get()):
             messagebox.showinfo("Success", "User created.")
-            self.ent_user.delete(0, tk.END)
-            self.ent_pass.delete(0, tk.END)
-            self.ent_name.delete(0, tk.END)
-            self.ent_email.delete(0, tk.END)
+            self.clear_form()
             self.load_users()
 
-    def edit_user(self):
-        sel = self.tree.selection()
-        if not sel:
-            messagebox.showwarning("Select", "ပြင်ရန် user ရွေးပါ။")
+    def update_user(self):
+        if self.selected_id is None:
+            messagebox.showwarning("Select", "Select a user first to update.")
             return
-        vals = self.tree.item(sel[0], "values")
-        uid = int(vals[0])
-
-        win = tk.Toplevel(self)
-        win.title(f"Edit User #{uid}")
-        win.geometry("460x360")
-        win.grab_set()
-
-        ttk.Label(win, text="Username:").grid(row=0, column=0, sticky="w", padx=10, pady=6)
-        e_user = ttk.Entry(win, width=36)
-        e_user.insert(0, vals[1])
-        e_user.grid(row=0, column=1, padx=10, pady=6)
-
-        ttk.Label(win, text="Full Name:").grid(row=1, column=0, sticky="w", padx=10, pady=6)
-        e_name = ttk.Entry(win, width=36)
-        e_name.insert(0, vals[2])
-        e_name.grid(row=1, column=1, padx=10, pady=6)
-
-        ttk.Label(win, text="Email:").grid(row=2, column=0, sticky="w", padx=10, pady=6)
-        e_email = ttk.Entry(win, width=36)
-        e_email.insert(0, vals[3] if len(vals) > 3 else "")
-        e_email.grid(row=2, column=1, padx=10, pady=6)
-
-        ttk.Label(win, text="Department:").grid(row=3, column=0, sticky="w", padx=10, pady=6)
-        cb_dept = ttk.Combobox(win, values=self.dept_names, width=34)
-        cb_dept.set(vals[4] if len(vals) > 4 else "")
-        cb_dept.grid(row=3, column=1, padx=10, pady=6)
-
-        ttk.Label(win, text="Role:").grid(row=4, column=0, sticky="w", padx=10, pady=6)
-        cb = ttk.Combobox(win, values=get_role_names(), state="readonly", width=34)
-        cb.set(vals[5] if len(vals) > 5 else "user")
-        cb.grid(row=4, column=1, padx=10, pady=6)
-
-        ttk.Label(win, text="Active:").grid(row=5, column=0, sticky="w", padx=10, pady=6)
-        v_active = tk.IntVar(value=1 if (len(vals) > 6 and vals[6] == "Yes") else 0)
-        ttk.Checkbutton(win, text="Enabled", variable=v_active, onvalue=1, offvalue=0).grid(
-            row=5, column=1, sticky="w", padx=10
-        )
-
-        ttk.Label(win, text="New Password:").grid(row=6, column=0, sticky="w", padx=10, pady=6)
-        e_pass = ttk.Entry(win, width=36, show="*")
-        e_pass.grid(row=6, column=1, padx=10, pady=6)
-
-        def save():
-            if update_user(
-                uid,
-                e_user.get().strip(),
-                e_name.get().strip(),
-                e_email.get().strip(),
-                cb_dept.get().strip(),
-                cb.get().strip().lower(),
-                v_active.get(),
-                e_pass.get() or None,
-            ):
-                messagebox.showinfo("Success", "Updated.", parent=win)
-                win.destroy()
-                self.load_users()
-
-        ttk.Button(win, text="Save", command=save).grid(row=7, column=1, sticky="e", padx=10, pady=12)
+        username = self.ent_user.get().strip()
+        password = self.ent_pass.get()
+        full_name = self.ent_name.get().strip()
+        email = self.ent_email.get().strip()
+        department = self.cb_dept.get().strip()
+        role = self.cb_role.get().strip().lower()
+        if not username:
+            messagebox.showwarning("Validation", "Username cannot be empty.")
+            return
+        if not department and role != "admin":
+            messagebox.showwarning("Validation", "Department ထည့်ပါ။")
+            return
+        if update_user(
+            self.selected_id,
+            username,
+            full_name,
+            email,
+            department,
+            role,
+            self.active_var.get(),
+            password or None,
+        ):
+            messagebox.showinfo("Success", "User updated.")
+            self.load_users()
+            if self.tree.exists(str(self.selected_id)):
+                self.tree.selection_set(str(self.selected_id))
 
     def remove_user(self):
         uid = self._selected_id()
@@ -260,7 +276,7 @@ class AccessMgmtView(ttk.Frame):
             if delete_user(uid, self.current_user["user_id"]):
                 messagebox.showinfo("Success", "Deleted.")
                 self.selected_id = None
+                self.clear_form()
                 self.load_users()
-
 
 UserMgmtView = AccessMgmtView

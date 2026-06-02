@@ -219,6 +219,14 @@ class MainDashboard(tk.Tk):
                 "title": "Role စီမံခန့်ခွဲမှု",
                 "subtitle": "Define roles & permissions",
             })
+        # Include Users in nav registry so header 'Users' quick-button works
+        if user_can(self.current_user, "can_manage_users"):
+            items.append({
+                "key": "users",
+                "label": "  Users",
+                "title": "User Management",
+                "subtitle": "Add / Edit Users",
+            })
         return items
 
     def _get_view_factory(self, key):

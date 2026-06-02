@@ -25,3 +25,4 @@ class DoctypeView(ttk.Frame):
         data = (self.cb_doc.get(), self.txt_remark.get("1.0", tk.END).strip())
         if insert_doctype(data):
             messagebox.showinfo("Success", "Document Type တည်ဆောက်ပြီးပါပြီ။")
+

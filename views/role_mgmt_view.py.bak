@@ -29,13 +29,10 @@ class RoleMgmtView(ttk.Frame):
         self.current_user = current_user
         self.selected_role_id = None
         self.selected_role_name = None
-        self._updating_ui = False  # Infinite Loop / Recursive Call တားဆီးရန် Flag variable
-        
         self.dept_names = fetch_department_names() or [f"Department {i}" for i in range(1, 11)]
         self.perm_vars = {key: tk.IntVar(value=0) for key in PERMISSION_KEYS}
         self.dept_perm_vars = {key: tk.IntVar(value=0) for key in DEPT_PERMISSION_KEYS}
         self.dept_vars = {}
-        
         self._build_ui()
         self.load_roles()
 
@@ -165,21 +162,21 @@ class RoleMgmtView(ttk.Frame):
         selector_frame = ttk.Frame(dept_frame)
         selector_frame.pack(fill="both", expand=True, padx=8, pady=4)
 
-        canvas2 = tk.Canvas(selector_frame, borderwidth=0, highlightthickness=0, height=120)
-        canvas2.pack(side="left", fill="both", expand=True)
-        scrollbar2 = ttk.Scrollbar(selector_frame, orient="vertical", command=canvas2.yview)
+        canvas = tk.Canvas(selector_frame, borderwidth=0, highlightthickness=0, height=120)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar2 = ttk.Scrollbar(selector_frame, orient="vertical", command=canvas.yview)
         scrollbar2.pack(side="right", fill="y")
-        canvas2.configure(yscrollcommand=scrollbar2.set)
+        canvas.configure(yscrollcommand=scrollbar2.set)
 
-        self.dept_check_container = ttk.Frame(canvas2)
-        self._dept_canvas_id = canvas2.create_window((0, 0), window=self.dept_check_container, anchor="nw")
+        self.dept_check_container = ttk.Frame(canvas)
+        self._dept_canvas_id = canvas.create_window((0, 0), window=self.dept_check_container, anchor="nw")
         self.dept_check_container.bind(
             "<Configure>",
-            lambda e: canvas2.configure(scrollregion=canvas2.bbox("all")),
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
         )
-        canvas2.bind(
+        canvas.bind(
             "<Configure>",
-            lambda e: canvas2.itemconfig(self._dept_canvas_id, width=e.width),
+            lambda e: canvas.itemconfig(self._dept_canvas_id, width=e.width),
         )
         self._build_department_checklist()
 
@@ -214,35 +211,24 @@ class RoleMgmtView(ttk.Frame):
                 offvalue=False,
             ).grid(row=index // 2, column=index % 2, sticky="w", padx=10, pady=4)
 
-    def _get_selected_role_db_id(self):
-        """Helper to safely get the database role_id from active selection."""
+    def _selected_role_id(self):
         sel = self.tree.selection()
         if not sel:
+            messagebox.showwarning("Select", "Select a role first.")
             return None
-        try:
-            return int(self.tree.set(sel[0], "role_id"))
-        except (ValueError, IndexError):
-            return None
+        return int(sel[0])
 
     def _selected_departments(self):
         return [name for name, var in self.dept_vars.items() if var.get()]
 
     def _refresh_department_preview(self):
-        # UI က data load လုပ်နေစဉ်အတွင်း Variable trace ကြောင့် loop ထပ်ပတ်ခြင်းကို ကျော်လွှာရန်
-        if self._updating_ui:
-            return
-
         if not self.selected_role_name:
             self.dept_status.config(text="Select a role to preview department permissions.")
             return
         departments = self._selected_departments()
         if not departments:
             self.dept_status.config(text="Select departments to preview permissions.")
-            # ဘာမှမရွေးထားရင် Flag field တွေကို reset ချပေးခြင်း
-            for var in self.dept_perm_vars.values():
-                var.set(0)
             return
-
         perms = fetch_department_permissions(self.selected_role_name, departments)
         aggregated = {}
         mixed = []
@@ -255,13 +241,8 @@ class RoleMgmtView(ttk.Frame):
                 mixed.append(key)
             else:
                 aggregated[key] = 0
-
-        # UI state ကို စနစ်တကျ ပြောင်းလဲခြင်း
-        self._updating_ui = True
         for key, var in self.dept_perm_vars.items():
             var.set(aggregated[key])
-        self._updating_ui = False
-
         if mixed:
             mixed_names = ", ".join(DEPT_PERMISSION_LABELS[key] for key in mixed)
             self.dept_status.config(text=f"Mixed permissions: {mixed_names}")
@@ -299,43 +280,28 @@ class RoleMgmtView(ttk.Frame):
         self.status_label.config(text=f"Loaded {len(roles)} role(s).")
 
     def _on_select(self, _event=None):
-        if self._updating_ui:
-            return
         self.load_selected_role()
 
     def load_selected_role(self):
-        role_id = self._get_selected_role_db_id()
-        if role_id is None:
+        sel = self.tree.selection()
+        if not sel:
+            messagebox.showwarning("Select", "Select a role to load.")
             return
-
-        roles_list = fetch_all_roles()
-        record = next((r for r in roles_list if r["role_id"] == role_id), None)
+        role_id = int(sel[0])
+        record = next((r for r in fetch_all_roles() if r["role_id"] == role_id), None)
         if not record:
             messagebox.showerror("Error", "Selected role could not be loaded.")
             return
-
-        self._updating_ui = True
-        try:
-            self.selected_role_id = role_id
-            self.selected_role_name = record["role_name"]
-            self.selected_role_label.config(text=self.selected_role_name)
-            
-            self.ent_role_name.delete(0, tk.END)
-            self.ent_role_name.insert(0, self.selected_role_name)
-            self.ent_description.delete(0, tk.END)
-            self.ent_description.insert(0, record.get("description", ""))
-            
-            for key in PERMISSION_KEYS:
-                self.perm_vars[key].set(1 if record.get(key) else 0)
-                
-            # Role အသစ်တစ်ခု ရွေးလိုက်တိုင်း Checklist boxes များကို ခေတ္တအမှန်ခြစ်ဖြုတ်ပေးခြင်း
-            for var in self.dept_vars.values():
-                var.set(False)
-                
-            self.dept_status.config(text="Select departments to preview permissions.")
-        finally:
-            self._updating_ui = False
-            
+        self.selected_role_id = role_id
+        self.selected_role_name = record["role_name"]
+        self.selected_role_label.config(text=self.selected_role_name)
+        self.ent_role_name.delete(0, tk.END)
+        self.ent_role_name.insert(0, self.selected_role_name)
+        self.ent_description.delete(0, tk.END)
+        self.ent_description.insert(0, record.get("description", ""))
+        for key in PERMISSION_KEYS:
+            self.perm_vars[key].set(1 if record.get(key) else 0)
+        self.dept_status.config(text="Select departments to preview permissions.")
         self._refresh_department_preview()
 
     def add_role(self):
@@ -381,34 +347,36 @@ class RoleMgmtView(ttk.Frame):
                 "Success",
                 f"Permissions saved for role '{self.selected_role_name}' on {len(departments)} department(s).",
             )
-            self.load_roles()  # Treeview table ထဲက စာသားများပါ ချက်ချင်း update ဖြစ်သွားစေရန်
             self._refresh_department_preview()
 
     def remove_role(self):
-        role_id = self._get_selected_role_db_id()
-        if role_id is None:
+        sel = self.tree.selection()
+        if not sel:
             messagebox.showwarning("Select", "ဖျက်ရန် role ရွေးချယ်ပါ။")
             return
+        role_id = int(sel[0])
         role_record = next((r for r in fetch_all_roles() if r["role_id"] == role_id), None)
         if role_record and delete_role(role_record["role_id"], role_record["role_name"]):
             messagebox.showinfo("Success", "Role deleted.")
+            self.selected_role_id = None
+            self.selected_role_name = None
+            self.selected_role_label.config(text="None")
             self.clear_form()
             self.load_roles()
 
     def clear_form(self):
-        self._updating_ui = True
-        try:
-            self.selected_role_id = None
-            self.selected_role_name = None
-            self.selected_role_label.config(text="None")
-            self.ent_role_name.delete(0, tk.END)
-            self.ent_description.delete(0, tk.END)
-            for var in self.perm_vars.values():
-                var.set(0)
-            for var in self.dept_perm_vars.values():
-                var.set(0)
-            for var in self.dept_vars.values():
-                var.set(False)
-            self.dept_status.config(text="Choose a role and departments to preview permissions.")
-        finally:
-            self._updating_ui = False
+        self.selected_role_id = None
+        self.selected_role_name = None
+        self.selected_role_label.config(text="None")
+        self.ent_role_name.delete(0, tk.END)
+        self.ent_description.delete(0, tk.END)
+        for var in self.perm_vars.values():
+            var.set(0)
+        for var in self.dept_perm_vars.values():
+            var.set(0)
+        for var in self.dept_vars.values():
+            var.set(False)
+        self.dept_status.config(text="Choose a role and departments to preview permissions.")
+
+
+RoleMgmtView = RoleMgmtView

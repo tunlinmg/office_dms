@@ -82,6 +82,7 @@ def _row_to_permissions(row):
 
 
 def user_can(user, permission_key):
+    """Check global system-level permissions."""
     if not user:
         return False
     perms = user.get("permissions")
@@ -89,6 +90,26 @@ def user_can(user, permission_key):
     if perms is not None:
         return bool(perms.get(permission_key, False))
     return user.get("role") == "admin"
+
+
+def user_can_dept(user, department, dept_permission_key):
+    """
+    Check if a user has a specific permission for a particular department.
+    Returns True if the user is an admin or explicitly has the permission.
+    """
+    if not user:
+        return False
+    if user.get("role") == "admin":
+        return True
+        
+    role_name = user.get("role")
+    if not role_name or not department:
+        return False
+        
+    dept_perms = fetch_department_permissions(role_name, [department])
+    if department in dept_perms:
+        return bool(dept_perms[department].get(dept_permission_key, False))
+    return False
 
 
 def _dept_row_to_permissions(row):
@@ -198,15 +219,15 @@ def save_department_permissions(role_name, departments, permissions):
         cursor = conn.cursor()
         cols = ", ".join(DEPT_PERMISSION_KEYS)
         placeholders = ", ".join(["%s"] * len(DEPT_PERMISSION_KEYS))
-        # Avoid using deprecated VALUES() - repeat values in the ON DUPLICATE KEY UPDATE clause
         update_clause = ", ".join([f"{k}=%s" for k in DEPT_PERMISSION_KEYS])
         query = (
             f"INSERT INTO department_role_permissions (role_name, department, {cols}) VALUES (%s, %s, {placeholders}) "
             f"ON DUPLICATE KEY UPDATE {update_clause}"
         )
         vals = [1 if permissions.get(k) else 0 for k in DEPT_PERMISSION_KEYS]
-        params = [[role_name, department] + vals + vals for department in departments]
-        cursor.executemany(query, params)
+        for department in departments:
+            params = [role_name, department] + vals + vals
+            cursor.execute(query, params)
         conn.commit()
         return True
     except Exception as e:
@@ -258,7 +279,6 @@ def get_permissions_for_role(role_name):
         fallback = next((r for r in DEFAULT_ROLES if r["role_name"] == role_name), None)
         if fallback:
             return _row_to_permissions(fallback)
-        # If no explicit fallback is present, return the 'user' role defaults
         return _row_to_permissions(DEFAULT_ROLES[1])
     return _row_to_permissions(row)
 
@@ -321,10 +341,17 @@ def delete_role(role_id, role_name):
         return False
     try:
         cursor = conn.cursor()
+        
+        # Check if users are still assigned to this role
         cursor.execute("SELECT COUNT(*) FROM users WHERE role = %s", (role_name,))
         if cursor.fetchone()[0] > 0:
             messagebox.showwarning("Delete Blocked", "Users are still assigned to this role.")
             return False
+            
+        # Clean up related department permissions first (Cascade Delete Logic)
+        cursor.execute("DELETE FROM department_role_permissions WHERE role_name = %s", (role_name,))
+        
+        # Delete the main role entry
         cursor.execute("DELETE FROM roles WHERE role_id = %s", (role_id,))
         conn.commit()
         return True
