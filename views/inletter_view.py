@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from tkcalendar import DateEntry
 
+from models.doctype_model import fetch_all_doctypes
 from models.inletter_model import insert_inletter, fetch_inletters
 from models.dept_model import fetch_department_names
 from models.user_model import is_admin, get_user_department
@@ -53,20 +54,26 @@ class InletterView(ttk.Frame):
         frame.pack(fill="both", expand=True, padx=15, pady=15)
 
         ttk.Label(frame, text="Letter Date:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
-        self.ent_date = DateEntry(frame, width=28, date_pattern="yyyy-mm-dd")
+        self.ent_date = DateEntry(frame, width=30, date_pattern="yyyy-mm-dd")
         self.ent_date.grid(row=0, column=1, padx=10, pady=5)
 
         ttk.Label(frame, text="Send Date:").grid(row=1, column=0, sticky="w", padx=10, pady=5)
-        self.ent_send = DateEntry(frame, width=28, date_pattern="yyyy-mm-dd")
+        self.ent_send = DateEntry(frame, width=30, date_pattern="yyyy-mm-dd")
         self.ent_send.grid(row=1, column=1, padx=10, pady=5)
 
+        # lettertype ကို doc_type table ကနေ combo box နဲ့ရွေးချယ်စေဖို့ ပြင်ဆင်ထားတာကို အမြန်ဆုံး ပြန်လည်တင်ပြပါမယ်။ ဒီလိုလုပ်ရတဲ့အကြောင်းကတော့ စာရွက်စာတမ်းအမျိုးအစားတွေကို အလွယ်တကူ ထပ်ထည့်နိုင်ဖို့နဲ့ အမျိုးအစားအသစ်တွေကို အလွယ်တကူ စီမံခန့်ခွဲနိုင်ဖို့ပါ။    
         ttk.Label(frame, text="Letter Type:").grid(row=2, column=0, sticky="w", padx=10, pady=5)
-        self.ent_type = ttk.Entry(frame, width=30)
+        letter_types = [dt[1] for dt in fetch_all_doctypes()]
+        if "none" not in letter_types:
+            letter_types.insert(0, "none")
+
+        self.ent_type = ttk.Combobox(frame, values=letter_types, width=30, state="readonly")
         self.ent_type.grid(row=2, column=1, padx=10, pady=5)
+        self.ent_type.current(0)
 
         ttk.Label(frame, text="Title / အကြောင်းအရာ:").grid(row=3, column=0, sticky="w", padx=10, pady=5)
-        self.ent_title = ttk.Entry(frame, width=50)
-        self.ent_title.grid(row=3, column=1, padx=10, pady=5)
+        self.txt_title = tk.Text(frame, width=30, height=3)
+        self.txt_title.grid(row=3, column=1, padx=10, pady=5)
 
         ttk.Label(frame, text="ပေးပို့ဌာန:").grid(row=4, column=0, sticky="w", padx=10, pady=5)
         self.cb_dept = ttk.Combobox(frame, values=["Ministry List", "Department List", "Other"], width=28)
@@ -77,7 +84,7 @@ class InletterView(ttk.Frame):
         self.ent_rec.grid(row=5, column=1, padx=10, pady=5)
 
         ttk.Label(frame, text="Owner Department:").grid(row=6, column=0, sticky="w", padx=10, pady=5)
-        self.cb_owner_dept = ttk.Combobox(frame, values=dept_names, width=28)
+        self.cb_owner_dept = ttk.Combobox(frame, values=dept_names, width=30)
         self.cb_owner_dept.grid(row=6, column=1, padx=10, pady=5)
         if admin:
             self.cb_owner_dept.set(dept_names[0] if dept_names else "")
@@ -179,7 +186,7 @@ class InletterView(ttk.Frame):
             self.ent_date.get(),
             self.ent_send.get(),
             self.ent_type.get(),
-            self.ent_title.get(),
+            self.txt_title.get("1.0", tk.END).strip(),
             self.cb_dept.get(),
             self.ent_rec.get(),
             self.cb_sec.get(),

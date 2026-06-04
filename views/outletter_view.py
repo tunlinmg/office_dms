@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from tkcalendar import DateEntry
 
+from models.doctype_model import fetch_all_doctypes
 from models.outletter_model import insert_outletter, fetch_outletters
 from models.dept_model import fetch_department_names
 from models.user_model import is_admin, get_user_department
@@ -54,10 +55,12 @@ class OutletterView(ttk.Frame):
         self.ent_date = DateEntry(form_frame, width=28, date_pattern="yyyy-mm-dd")
         self.ent_date.grid(row=0, column=1, padx=10, pady=5)
 
+        # lettertype ကို doc_type table ကနေ combo box နဲ့ရွေးချယ်စေဖို့ ပြင်ဆင်ထားတာကို အမြန်ဆုံး ပြန်လည်တင်ပြပါမယ်။ ဒီလိုလုပ်ရတဲ့အကြောင်းကတော့ စာရွက်စာတမ်းအမျိုးအစားတွေကို အလွယ်တကူ ထပ်ထည့်နိုင်ဖို့နဲ့ အမျိုးအစားအသစ်တွေကို အလွယ်တကူ စီမံခန့်ခွဲနိုင်ဖို့ပါ။    
         ttk.Label(form_frame, text="Letter Type:").grid(row=1, column=0, sticky="w", padx=10, pady=5)
-        self.ent_type = ttk.Entry(form_frame, width=30)
+        self.ent_type = ttk.Combobox(form_frame, values=[dt[1] for dt in fetch_all_doctypes()], width=28) 
         self.ent_type.grid(row=1, column=1, padx=10, pady=5)
-
+        self.ent_type.set("none")   
+        
         ttk.Label(form_frame, text="Title / အကြောင်းအရာ:").grid(row=2, column=0, sticky="w", padx=10, pady=5)
         self.ent_title = ttk.Entry(form_frame, width=50)
         self.ent_title.grid(row=2, column=1, padx=10, pady=5)
