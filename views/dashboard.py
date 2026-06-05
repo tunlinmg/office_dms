@@ -13,10 +13,12 @@ from views.access_mgmt_view import AccessMgmtView
 from views.role_mgmt_view import RoleMgmtView
 from views.role_management import RoleManagementView
 from models.role_model import user_can
+from models.activity_log_model import log_activity
 
 # ယခု ဖိုင်အသစ်များမှ Class များကို Import လုပ်ထားပါသည်
 from views.inletter_query import InLetterQuery
 from views.outletter_query import OutLetterQuery
+from views.activity_log_view import ActivityLogView
 
 
 class MainDashboard(tk.Tk):
@@ -81,6 +83,23 @@ class MainDashboard(tk.Tk):
             bg="#ffffff",
             fg="#64748b",
         ).pack(side="left", padx=(0, 12), pady=6)
+
+        # Quick-access: User activity log (visible to permitted admin account users)
+        if user_can(self.current_user, "can_view_user_logs"):
+            tk.Button(
+                right_group,
+                text="User Logs",
+                font=("Segoe UI", 9),
+                bg="#7c3aed",
+                fg="white",
+                activebackground="#6d28d9",
+                activeforeground="white",
+                relief="flat",
+                padx=8,
+                pady=4,
+                cursor="hand2",
+                command=lambda: self.show_view("user_logs"),
+            ).pack(side="left", padx=(0, 8), pady=6)
 
         # Quick-access: User Management (visible to permitted users)
         if user_can(self.current_user, "can_manage_users"):
@@ -227,6 +246,13 @@ class MainDashboard(tk.Tk):
                 "title": "User Management",
                 "subtitle": "Add / Edit Users",
             })
+        if user_can(self.current_user, "can_view_user_logs"):
+            items.append({
+                "key": "user_logs",
+                "label": "  User Activity Log",
+                "title": "User Activity Log",
+                "subtitle": "View user actions & history",
+            })
         return items
 
     def _get_view_factory(self, key):
@@ -246,6 +272,7 @@ class MainDashboard(tk.Tk):
             "rows": (RoleManagementView, {"current_user": self.current_user}),
             "users": (AccessMgmtView, {"current_user": self.current_user}),
             "roles": (RoleMgmtView, {"current_user": self.current_user}),
+            "user_logs": (ActivityLogView, {"current_user": self.current_user}),
         }
         return factories.get(key)
 
@@ -267,6 +294,10 @@ class MainDashboard(tk.Tk):
         self._clear_content()
         view_frame = view_class(self.content_container, **kwargs)
         view_frame.pack(fill="both", expand=True)
+        log_activity(
+            self.current_user.get("user_id"), self.current_user.get("username"),
+            "VIEW", f"Viewed page: {meta['title']} ({key})",
+        )
         # Reload DB-backed lists each time the screen is opened (sidebar navigation)
         if hasattr(view_frame, "refresh_data"):
             view_frame.after_idle(view_frame.refresh_data)
@@ -294,6 +325,10 @@ class MainDashboard(tk.Tk):
 
     def logout(self):
         if messagebox.askyesno("Logout", "အကောင့်မှ ထွက်ရန် သေချာပါသလား?"):
+            log_activity(
+                self.current_user.get("user_id"), self.current_user.get("username"),
+                "LOGOUT", f"User '{self.current_user.get('username')}' logged out",
+            )
             self.destroy()
             from views.login_view import LoginWindow
             import config

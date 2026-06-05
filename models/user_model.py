@@ -2,6 +2,7 @@
 import mysql.connector
 from config import get_db_connection, hash_password
 from models.role_model import get_permissions_for_role, get_role_names, fetch_department_permissions
+from models.activity_log_model import log_activity
 from tkinter import messagebox
 
 
@@ -91,7 +92,7 @@ def fetch_all_users():
         conn.close()
 
 
-def insert_user(username, password, full_name, email, department, role, is_active=1):
+def insert_user(username, password, full_name, email, department, role, is_active=1, current_user=None):
     valid_roles = get_role_names()
     if role not in valid_roles:
         messagebox.showerror("Model Error", f"Invalid role '{role}'.")
@@ -118,6 +119,11 @@ def insert_user(username, password, full_name, email, department, role, is_activ
             ),
         )
         conn.commit()
+        if current_user:
+            log_activity(
+                current_user.get("user_id"), current_user.get("username"),
+                "INSERT", f"Created user '{username}' (role={role}, dept={department})",
+            )
         return True
     except Exception as e:
         messagebox.showerror("Model Error", str(e))
@@ -126,7 +132,7 @@ def insert_user(username, password, full_name, email, department, role, is_activ
         conn.close()
 
 
-def update_user(user_id, username, full_name, email, department, role, is_active, password=None):
+def update_user(user_id, username, full_name, email, department, role, is_active, password=None, current_user=None):
     valid_roles = get_role_names()
     if role not in valid_roles:
         messagebox.showerror("Model Error", f"Invalid role '{role}'.")
@@ -166,6 +172,11 @@ def update_user(user_id, username, full_name, email, department, role, is_active
                 ),
             )
         conn.commit()
+        if current_user:
+            log_activity(
+                current_user.get("user_id"), current_user.get("username"),
+                "UPDATE", f"Updated user '{username}' (ID={user_id}, role={role}, dept={department})",
+            )
         return True
     except Exception as e:
         messagebox.showerror("Model Error", str(e))
@@ -198,9 +209,9 @@ def update_user_role(user_id, role):
         conn.close()
 
 
-def delete_user(user_id, current_user_id):
+def delete_user(user_id, current_user_id, current_user=None):
     if user_id == current_user_id:
-        messagebox.showwarning("Delete Blocked", "သင့်အကောင့်ကို ဖျက်၍မရပါ။")
+        messagebox.showwarning("Delete Blocked", "သင့်အကောင့်ကို ဖျက်၍မရပါ။")
         return False
     conn = get_db_connection()
     if not conn:
@@ -216,6 +227,11 @@ def delete_user(user_id, current_user_id):
             return False
         cursor.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
         conn.commit()
+        if current_user:
+            log_activity(
+                current_user.get("user_id"), current_user.get("username"),
+                "DELETE", f"Deleted user ID={user_id}",
+            )
         return True
     except Exception as e:
         messagebox.showerror("Model Error", str(e))

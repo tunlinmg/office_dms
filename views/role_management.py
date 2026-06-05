@@ -27,7 +27,9 @@ class RoleManagementView(ttk.Frame):
         self.cb_table.bind("<<ComboboxSelected>>", self.on_table_change)
 
         ttk.Button(top, text="Refresh", command=self.load_rows).pack(side="left", padx=5)
-        ttk.Button(top, text="Edit Selected", command=self.edit_row).pack(side="left", padx=5)
+        # Show Edit button only to users with edit permission
+        if user_can(self.current_user, "can_edit_rows"):
+            ttk.Button(top, text="Edit Selected", command=self.edit_row).pack(side="left", padx=5)
         if user_can(self.current_user, "can_delete_rows"):
             ttk.Button(top, text="Delete Selected", command=self.remove_row).pack(side="left", padx=5)
 
@@ -85,6 +87,10 @@ class RoleManagementView(ttk.Frame):
         return self.tree.item(sel[0], "values")[0]
 
     def edit_row(self):
+        # Prevent direct edit if the user lacks edit permission
+        if not user_can(self.current_user, "can_edit_rows"):
+            messagebox.showwarning("Permission", "You do not have permission to edit rows.")
+            return
         sel = self.tree.selection()
         if not sel:
             messagebox.showwarning("Selection", "ပြင်ရန် အတန်းတစ်ခု ရွေးချယ်ပါ။")

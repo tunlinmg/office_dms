@@ -21,11 +21,11 @@ class DoctypeView(ttk.Frame):
         form_frame.pack(fill="x", padx=20, pady=(20, 10))
 
         ttk.Label(form_frame, text="Document Type:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
-        self.cb_doc = ttk.Entry(form_frame, width=28)
+        self.cb_doc = ttk.Entry(form_frame, width=33)
         self.cb_doc.grid(row=0, column=1, padx=10, pady=5)
 
         ttk.Label(form_frame, text="မှတ်ချက်:").grid(row=1, column=0, sticky="nw", padx=10, pady=5)
-        self.txt_remark = tk.Text(form_frame, width=50, height=6)
+        self.txt_remark = tk.Text(form_frame, width=25, height=6)
         self.txt_remark.grid(row=1, column=1, padx=10, pady=5)
 
         ttk.Button(form_frame, text="Save Doc Type", command=self.save_data).grid(

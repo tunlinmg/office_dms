@@ -16,6 +16,7 @@ PERMISSION_KEYS = (
     "can_edit_rows",
     "can_entry_forms",
     "can_view_reports",
+    "can_view_user_logs",
 )
 
 PERMISSION_LABELS = {
@@ -25,6 +26,7 @@ PERMISSION_LABELS = {
     "can_edit_rows": "Edit Data Rows",
     "can_entry_forms": "Entry Forms (In/Out letter, etc.)",
     "can_view_reports": "Query / Reports",
+    "can_view_user_logs": "View User Activity Logs",
 }
 
 DEPT_PERMISSION_KEYS = (
@@ -51,6 +53,7 @@ DEFAULT_ROLES = [
         "can_edit_rows": 1,
         "can_entry_forms": 1,
         "can_view_reports": 1,
+        "can_view_user_logs": 1,
     },
     {
         "role_name": "user",
@@ -61,6 +64,7 @@ DEFAULT_ROLES = [
         "can_edit_rows": 1,
         "can_entry_forms": 1,
         "can_view_reports": 1,
+        "can_view_user_logs": 0,
     },
     {
         "role_name": "viewer",
@@ -71,6 +75,7 @@ DEFAULT_ROLES = [
         "can_edit_rows": 0,
         "can_entry_forms": 0,
         "can_view_reports": 1,
+        "can_view_user_logs": 0,
     },
 ]
 

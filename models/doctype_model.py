@@ -1,8 +1,9 @@
 # models/doctype_model.py
 from config import get_db_connection
+from models.activity_log_model import log_activity
 from tkinter import messagebox
 
-def insert_doctype(data):
+def insert_doctype(data, current_user=None):
     conn = get_db_connection()
     if not conn: return False
     try:
@@ -10,6 +11,12 @@ def insert_doctype(data):
         query = "INSERT INTO doc_type (doc_type, remark) VALUES (%s, %s)"
         cursor.execute(query, data)
         conn.commit()
+        if current_user:
+            doc_type = data[0] if len(data) > 0 else ""
+            log_activity(
+                current_user.get("user_id"), current_user.get("username"),
+                "INSERT", f"Created doc type: {doc_type}",
+            )
         return True
     except Exception as e:
         messagebox.showerror("Model Error", str(e))
@@ -43,7 +50,7 @@ def fetch_doctype_by_id(doc_id):
     finally:
         conn.close()
 
-def update_doctype(doc_id, data):
+def update_doctype(doc_id, data, current_user=None):
     """data: (doc_type, remark)"""
     conn = get_db_connection()
     if not conn: return False
@@ -51,6 +58,11 @@ def update_doctype(doc_id, data):
         cursor = conn.cursor()
         cursor.execute("UPDATE doc_type SET doc_type = %s, remark = %s WHERE file_id = %s", (data[0], data[1], doc_id))
         conn.commit()
+        if current_user:
+            log_activity(
+                current_user.get("user_id"), current_user.get("username"),
+                "UPDATE", f"Updated doc type ID={doc_id}: {data[0]}",
+            )
         return True
     except Exception as e:
         messagebox.showerror("Model Error", str(e))
@@ -58,13 +70,18 @@ def update_doctype(doc_id, data):
     finally:
         conn.close()
 
-def delete_doctype(doc_id):
+def delete_doctype(doc_id, current_user=None):
     conn = get_db_connection()
     if not conn: return False
     try:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM doc_type WHERE file_id = %s", (doc_id,))
         conn.commit()
+        if current_user:
+            log_activity(
+                current_user.get("user_id"), current_user.get("username"),
+                "DELETE", f"Deleted doc type ID={doc_id}",
+            )
         return True
     except Exception as e:
         messagebox.showerror("Model Error", str(e))

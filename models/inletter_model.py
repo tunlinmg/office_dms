@@ -1,10 +1,21 @@
 # models/inletter_model.py
 from config import get_db_connection
 from models.user_model import apply_department_sql
+from models.activity_log_model import log_activity
 from tkinter import messagebox
 
 
-def insert_inletter(data):
+def insert_inletter(data, current_user=None):
+    """Insert a new inletter record into the database.
+    
+    Args:
+        data: tuple of 12 fields — (letter_date, send_date, letter_type, title,
+              dept_from, recipient, security_lvl, urgency_lvl, casefile_no,
+              attachment_path, remark, owner_department)
+        current_user: the logged-in user dict (for activity logging)
+    Returns:
+        True on success, False on failure.
+    """
     conn = get_db_connection()
     if not conn:
         return False
@@ -16,6 +27,12 @@ def insert_inletter(data):
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
         cursor.execute(query, data)
         conn.commit()
+        if current_user:
+            title = data[2] if len(data) > 2 else ""
+            log_activity(
+                current_user.get("user_id"), current_user.get("username"),
+                "INSERT", f"Created inletter: {title}",
+            )
         return True
     except Exception as e:
         messagebox.showerror("Model Error", str(e))
@@ -25,6 +42,11 @@ def insert_inletter(data):
 
 
 def fetch_inletters(current_user):
+    """Fetch all inletter records visible to the current user (department-filtered).
+    
+    Returns a list of tuples: (file_id, letter_date, send_date, letter_type,
+    title, dept_from, recipient, owner_department)
+    """
     conn = get_db_connection()
     if not conn:
         return []
@@ -41,5 +63,96 @@ def fetch_inletters(current_user):
     except Exception as e:
         messagebox.showerror("Model Error", str(e))
         return []
+    finally:
+        conn.close()
+
+
+def fetch_inletter_by_id(file_id):
+    """Fetch a single inletter record by its primary key (file_id).
+    
+    Returns a tuple of all 13 columns: (file_id, letter_date, send_date,
+    letter_type, title, dept_from, recipient, security_lvl, urgency_lvl,
+    casefile_no, attachment_path, remark, owner_department)
+    or None if not found.
+    """
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        query = """SELECT file_id, letter_date, send_date, letter_type, title,
+                          dept_from, recipient, security_lvl, urgency_lvl,
+                          casefile_no, attachment_path, remark, owner_department
+                   FROM inletter WHERE file_id = %s"""
+        cursor.execute(query, (file_id,))
+        return cursor.fetchone()
+    except Exception as e:
+        messagebox.showerror("Model Error", str(e))
+        return None
+    finally:
+        conn.close()
+
+
+def update_inletter(file_id, data, current_user=None):
+    """Update an existing inletter record identified by file_id.
+    
+    Args:
+        file_id: the primary key of the record to update.
+        data: tuple of 12 fields (same order as insert_inletter).
+        current_user: the logged-in user dict (for activity logging)
+    Returns:
+        True on success, False on failure.
+    """
+    conn = get_db_connection()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        query = """UPDATE inletter SET
+                    letter_date = %s, send_date = %s, letter_type = %s,
+                    title = %s, dept_from = %s, recipient = %s,
+                    security_lvl = %s, urgency_lvl = %s, casefile_no = %s,
+                    attachment_path = %s, remark = %s, owner_department = %s
+                   WHERE file_id = %s"""
+        cursor.execute(query, data + (file_id,))
+        conn.commit()
+        if current_user:
+            title = data[2] if len(data) > 2 else ""
+            log_activity(
+                current_user.get("user_id"), current_user.get("username"),
+                "UPDATE", f"Updated inletter ID={file_id}: {title}",
+            )
+        return True
+    except Exception as e:
+        messagebox.showerror("Model Error", str(e))
+        return False
+    finally:
+        conn.close()
+
+
+def delete_inletter(file_id, current_user=None):
+    """Delete an inletter record by its primary key (file_id).
+    
+    Args:
+        current_user: the logged-in user dict (for activity logging)
+    Returns:
+        True on success, False on failure.
+    """
+    conn = get_db_connection()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM inletter WHERE file_id = %s", (file_id,))
+        conn.commit()
+        if current_user:
+            log_activity(
+                current_user.get("user_id"), current_user.get("username"),
+                "DELETE", f"Deleted inletter ID={file_id}",
+            )
+        return True
+    except Exception as e:
+        messagebox.showerror("Model Error", str(e))
+        return False
     finally:
         conn.close()

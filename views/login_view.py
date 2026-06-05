@@ -2,6 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from models.user_model import authenticate
+from models.activity_log_model import log_activity
 
 
 class LoginWindow(tk.Tk):
@@ -48,4 +49,5 @@ class LoginWindow(tk.Tk):
             messagebox.showerror("Login Failed", "Username သို့မဟုတ် Password မှားနေပါသည်။")
             return
         self.user = user
+        log_activity(user.get("user_id"), user.get("username"), "LOGIN", f"User '{user.get('username')}' logged in")
         self.destroy()

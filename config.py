@@ -95,7 +95,8 @@ def init_db():
                 can_delete_rows TINYINT(1) DEFAULT 0,
                 can_edit_rows TINYINT(1) DEFAULT 0,
                 can_entry_forms TINYINT(1) DEFAULT 1,
-                can_view_reports TINYINT(1) DEFAULT 1
+                can_view_reports TINYINT(1) DEFAULT 1,
+                can_view_user_logs TINYINT(1) DEFAULT 0
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
 
@@ -112,9 +113,6 @@ def init_db():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
 
-        from models.role_model import seed_default_roles
-        seed_default_roles(cursor)
-
         # Users Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -129,6 +127,20 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
+        # User Activity Log table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_activity_log (
+                log_id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT,
+                username VARCHAR(100),
+                action VARCHAR(255) NOT NULL,
+                detail TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_user_id (user_id),
+                INDEX idx_created_at (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        """)
+
         # Migrate older tables
         for col_sql in (
             "ALTER TABLE users ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
@@ -139,11 +151,15 @@ def init_db():
             "ALTER TABLE users ADD COLUMN is_active TINYINT(1) DEFAULT 1",
             "ALTER TABLE inletter ADD COLUMN owner_department VARCHAR(255) DEFAULT NULL",
             "ALTER TABLE outletter ADD COLUMN owner_department VARCHAR(255) DEFAULT NULL",
+            "ALTER TABLE roles ADD COLUMN can_view_user_logs TINYINT(1) DEFAULT 0",
         ):
             try:
                 cursor.execute(col_sql)
             except mysql.connector.Error:
                 pass
+
+        from models.role_model import seed_default_roles
+        seed_default_roles(cursor)
 
         cursor.execute("SELECT COUNT(*) FROM users")
         if cursor.fetchone()[0] == 0:
