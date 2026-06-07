@@ -1,5 +1,6 @@
 # config.py
 import hashlib
+import decimal
 import mysql.connector
 from tkinter import messagebox
 
@@ -24,6 +25,113 @@ def get_db_connection():
     except mysql.connector.Error as err:
         messagebox.showerror("Database Connection Error", f"Error: {err}")
         return None
+
+
+def get_server_connection():
+    try:
+        server_config = {
+            "host": DB_CONFIG["host"],
+            "user": DB_CONFIG["user"],
+            "password": DB_CONFIG["password"],
+            "charset": DB_CONFIG.get("charset", "utf8mb4"),
+            "use_unicode": True,
+        }
+        return mysql.connector.connect(**server_config)
+    except mysql.connector.Error as err:
+        messagebox.showerror("Database Connection Error", f"Error: {err}")
+        return None
+
+
+def _escape_sql_value(value):
+    if value is None:
+        return "NULL"
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, (int, float, decimal.Decimal)):
+        return str(value)
+    text = str(value)
+    text = text.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r")
+    return f"'{text}'"
+
+
+def backup_database(backup_path):
+    conn = get_db_connection()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SHOW TABLES")
+        tables = [row[0] for row in cursor.fetchall()]
+        if not tables:
+            return False
+
+        with open(backup_path, "w", encoding="utf-8") as backup_file:
+            backup_file.write(
+                f"CREATE DATABASE IF NOT EXISTS `{DB_CONFIG['database']}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\n"
+                f"USE `{DB_CONFIG['database']}`;\n\n"
+            )
+
+            for table in tables:
+                cursor.execute(f"SHOW CREATE TABLE `{table}`")
+                create_row = cursor.fetchone()
+                if not create_row or len(create_row) < 2:
+                    continue
+                backup_file.write(f"{create_row[1]};\n\n")
+                cursor.execute(f"SELECT * FROM `{table}`")
+                rows = cursor.fetchall()
+                if not rows:
+                    continue
+                columns = [desc[0] for desc in cursor.description]
+                cols_sql = ", ".join([f"`{col}`" for col in columns])
+                for row in rows:
+                    values = ", ".join([_escape_sql_value(value) for value in row])
+                    backup_file.write(f"INSERT INTO `{table}` ({cols_sql}) VALUES ({values});\n")
+                backup_file.write("\n")
+        return True
+    except Exception as err:
+        messagebox.showerror("Backup Failed", f"Could not create backup: {err}")
+        return False
+    finally:
+        conn.close()
+
+
+def restore_database(backup_path):
+    conn = get_server_connection()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        with open(backup_path, "r", encoding="utf-8") as backup_file:
+            sql = backup_file.read()
+        for result in cursor.execute(sql, multi=True):
+            pass
+        conn.commit()
+        return True
+    except Exception as err:
+        messagebox.showerror("Restore Failed", f"Could not restore database: {err}")
+        return False
+    finally:
+        conn.close()
+
+
+def delete_database():
+    conn = get_server_connection()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f"DROP DATABASE IF EXISTS `{DB_CONFIG['database']}`")
+        conn.commit()
+        conn.close()
+        init_db()
+        return True
+    except Exception as err:
+        messagebox.showerror("Delete Failed", f"Could not delete database: {err}")
+        return False
+    finally:
+        if conn.is_connected():
+            conn.close()
+
 
 def init_db():
     try:

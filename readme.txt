@@ -1,4 +1,4 @@
-# Office DMS - Document Management System
+##### Office DMS - Document Management System
 
 ## 1. Prerequisites
 Before running the application, ensure you have the required Python package installed:
@@ -44,7 +44,8 @@ office_dms/
     ├── user_mgmt_view.py  # alias for access_mgmt_view
     ├── user_view.py       # alias for access_mgmt_view
     ├── role_management.py  # Database Row Edit/Delete
-    └── row_manage_view.py  # alias for role_management
+    ├── row_manage_view.py  # alias for role_management
+    └── settings_view.py   # System Settings (Backup, Restore, Delete DB)
 ```
 
 ## 3. Default Login Credentials

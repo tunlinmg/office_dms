@@ -12,7 +12,9 @@ from views.main_query import MainQueryView
 from views.access_mgmt_view import AccessMgmtView
 from views.role_mgmt_view import RoleMgmtView
 from views.role_management import RoleManagementView
+from views.settings_view import SettingsView
 from models.role_model import user_can
+from models.user_model import is_admin
 from models.activity_log_model import log_activity
 
 # ယခု ဖိုင်အသစ်များမှ Class များကို Import လုပ်ထားပါသည်
@@ -135,6 +137,23 @@ class MainDashboard(tk.Tk):
                 command=lambda: self.show_view("roles"),
             ).pack(side="left", padx=(0, 8), pady=6)
 
+        # Quick-access: Settings (admin only)
+        if is_admin(self.current_user):
+            tk.Button(
+                right_group,
+                text="Settings",
+                font=("Segoe UI", 9),
+                bg="#0f172a",
+                fg="white",
+                activebackground="#111827",
+                activeforeground="white",
+                relief="flat",
+                padx=8,
+                pady=4,
+                cursor="hand2",
+                command=lambda: self.show_view("settings"),
+            ).pack(side="left", padx=(0, 8), pady=6)
+
         tk.Button(
             right_group,
             text="Logout",
@@ -253,6 +272,13 @@ class MainDashboard(tk.Tk):
                 "title": "User Activity Log",
                 "subtitle": "View user actions & history",
             })
+        if is_admin(self.current_user):
+            items.append({
+                "key": "settings",
+                "label": "  System Settings",
+                "title": "System Settings",
+                "subtitle": "Backup, Restore, or Delete Database",
+            })
         return items
 
     def _get_view_factory(self, key):
@@ -273,6 +299,7 @@ class MainDashboard(tk.Tk):
             "users": (AccessMgmtView, {"current_user": self.current_user}),
             "roles": (RoleMgmtView, {"current_user": self.current_user}),
             "user_logs": (ActivityLogView, {"current_user": self.current_user}),
+            "settings": (SettingsView, {"current_user": self.current_user}),
         }
         return factories.get(key)
 
