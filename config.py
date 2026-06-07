@@ -249,6 +249,17 @@ def init_db():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
 
+        # Modules Registry table (plugin/module management)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS modules_registry (
+                id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                module_name TEXT,
+                file_name TEXT,
+                status INTEGER DEFAULT 1,
+                description TEXT
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        """)
+
         # Migrate older tables
         for col_sql in (
             "ALTER TABLE users ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
@@ -266,7 +277,7 @@ def init_db():
             except mysql.connector.Error:
                 pass
 
-        from models.role_model import seed_default_roles
+        from src.models.role_model import seed_default_roles
         seed_default_roles(cursor)
 
         cursor.execute("SELECT COUNT(*) FROM users")

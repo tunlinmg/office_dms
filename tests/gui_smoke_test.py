@@ -5,7 +5,7 @@ base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 
-from views.dashboard import MainDashboard
+from src.views.dashboard import MainDashboard
 
 user = {
     'username': 'tester',

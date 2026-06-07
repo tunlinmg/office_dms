@@ -1,7 +1,7 @@
 # main.py
 import config
-from views.login_view import LoginWindow
-from views.dashboard import MainDashboard
+from src.views.login_view import LoginWindow
+from src.views.dashboard import MainDashboard
 
 
 def main():

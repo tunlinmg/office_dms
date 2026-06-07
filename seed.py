@@ -1,6 +1,6 @@
 import config
-from models.inletter_model import insert_inletter
-from models.outletter_model import insert_outletter
+from src.models.inletter_model import insert_inletter
+from src.models.outletter_model import insert_outletter
 
 
 def seed_inletters():
