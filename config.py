@@ -1,18 +1,78 @@
 # config.py
 import hashlib
 import decimal
+import json
+import os
 import mysql.connector
 from tkinter import messagebox
 
-DB_CONFIG = {
+# Default database configuration values
+_DEFAULT_DB_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": "root",  # မိမိ MySQL Password ထည့်ပါ
+    "password": "root",
     "database": "office_doc_db",
-    "charset": "utf8mb4"
+    "charset": "utf8mb4",
 }
 
+# Path to the local JSON config file (same directory as this script)
+_DB_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db_config.json")
+
+
+def _load_db_config():
+    """Load database configuration from db_config.json.
+
+    If the file does not exist, create it with default values and return defaults.
+    If the file exists but is malformed, fall back to defaults and overwrite.
+
+    Returns:
+        dict: Database configuration with keys: host, user, password, database, charset.
+    """
+    if not os.path.exists(_DB_CONFIG_FILE):
+        _save_db_config(_DEFAULT_DB_CONFIG)
+        return dict(_DEFAULT_DB_CONFIG)
+
+    try:
+        with open(_DB_CONFIG_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        config = {}
+        for key in _DEFAULT_DB_CONFIG:
+            config[key] = data.get(key, _DEFAULT_DB_CONFIG[key])
+        return config
+    except (json.JSONDecodeError, IOError):
+        _save_db_config(_DEFAULT_DB_CONFIG)
+        return dict(_DEFAULT_DB_CONFIG)
+
+
+def _save_db_config(config_dict):
+    """Save database configuration to db_config.json.
+
+    Args:
+        config_dict (dict): Configuration dictionary to persist.
+    """
+    try:
+        with open(_DB_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(config_dict, f, indent=4, ensure_ascii=False)
+    except IOError as err:
+        messagebox.showerror("Config Save Error", f"Could not save db_config.json:\n{err}")
+
+
+def save_db_config(config_dict):
+    """Public helper: save config to JSON and reload the in-memory DB_CONFIG.
+
+    Args:
+        config_dict (dict): Configuration dictionary to persist.
+    """
+    _save_db_config(config_dict)
+    global DB_CONFIG
+    DB_CONFIG = _load_db_config()
+
+
+# Active in-memory configuration (loaded at import time)
+DB_CONFIG = _load_db_config()
+
 DEFAULT_DEPARTMENTS = [f"Department-{i}" for i in range(1, 11)]
+
 
 def hash_password(password, username=""):
     raw = f"{username}:{password}".encode("utf-8")
@@ -135,18 +195,16 @@ def delete_database():
 
 def init_db():
     try:
-        # Database မရှိလျှင် ဆောက်ရန်
         conn = mysql.connector.connect(host=DB_CONFIG["host"], user=DB_CONFIG["user"], password=DB_CONFIG["password"])
         cursor = conn.cursor()
         cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DB_CONFIG['database']} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
         conn.close()
-        
-        # Table များ ဆောက်ရန်
+
         conn = get_db_connection()
-        if not conn: return
+        if not conn:
+            return
         cursor = conn.cursor()
-        
-        # Inletter Table
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS inletter (
                 file_id INT AUTO_INCREMENT PRIMARY KEY, letter_date VARCHAR(50), send_date VARCHAR(50),
@@ -156,7 +214,6 @@ def init_db():
                 owner_department VARCHAR(255) DEFAULT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
-        # Outletter Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS outletter (
                 file_id INT AUTO_INCREMENT PRIMARY KEY, letter_date VARCHAR(50), letter_type VARCHAR(100),
@@ -165,19 +222,16 @@ def init_db():
                 owner_department VARCHAR(255) DEFAULT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
-        # Doc Type Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS doc_type (
                 file_id INT AUTO_INCREMENT PRIMARY KEY, doc_type VARCHAR(100), remark TEXT
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
-        # Action Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS action_entry (
                 file_id INT AUTO_INCREMENT PRIMARY KEY, action_type VARCHAR(100), action_process VARCHAR(100), sub_action VARCHAR(255), remark TEXT
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
-        # Department Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS department (
                 file_id INT AUTO_INCREMENT PRIMARY KEY, dept_name VARCHAR(255), dept_type VARCHAR(100), dept_level VARCHAR(100),
@@ -192,7 +246,6 @@ def init_db():
                     (dept_name, "General", "Level 1", "", "", "", "Seeded default department."),
                 )
 
-        # Roles Table (permissions)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS roles (
                 role_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -221,7 +274,6 @@ def init_db():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
 
-        # Users Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -235,7 +287,6 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
-        # User Activity Log table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_activity_log (
                 log_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -249,7 +300,6 @@ def init_db():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
 
-        # Modules Registry table (plugin/module management)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS modules_registry (
                 id INTEGER PRIMARY KEY AUTO_INCREMENT,
@@ -260,7 +310,6 @@ def init_db():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
 
-        # Migrate older tables
         for col_sql in (
             "ALTER TABLE users ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
             "ALTER TABLE users ADD COLUMN full_name VARCHAR(255)",
